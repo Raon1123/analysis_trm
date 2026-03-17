@@ -3,6 +3,8 @@
 # Virtual environments
 venv/
 .venv/
+wandb/
+checkpoints/
 
 # uv
 uv.lock
