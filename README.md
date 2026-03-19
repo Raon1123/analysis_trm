@@ -20,6 +20,8 @@ Tiny Recursion Model (TRM) recursively improves its predicted answer y with a ti
 
 ### Requirements
 
+Installation should take a few minutes. For the smallest experiments on Sudoku-Extreme (pretrain_mlp_t_sudoku), you need 1 GPU with enough memory. With 1 L40S (48Gb Ram), it takes around 18h to finish. In case that you run into issues due to library versions, here is the requirements with the exact versions used: [specific_requirements.txt](https://github.com/SamsungSAILMontreal/TinyRecursiveModels/blob/main/specific_requirements.txt).
+
 - Python 3.10 (or similar)
 - Cuda 12.6.0 (or similar)
 
@@ -84,8 +86,6 @@ python dataset/build_maze_dataset.py
 
 ## Experiments
 
-You can run experiments using the predefined uv commands or directly with torchrun/python.
-
 ### ARC-AGI-1 (assuming 4 H-100 GPUs):
 
 ```bash
@@ -131,14 +131,6 @@ arch.H_cycles=3 arch.L_cycles=4 \
 ### Sudoku-Extreme (assuming 1 L40S GPU):
 
 ```bash
-# Using uv run
-uv run pretrain-sudoku-mlp-t
-uv run pretrain-sudoku-att
-```
-
-Or directly:
-
-```bash
 run_name="pretrain_mlp_t_sudoku"
 python pretrain.py \
 arch=trm \
@@ -166,13 +158,6 @@ arch.H_cycles=3 arch.L_cycles=6 \
 *Runtime:* < 36 hours
 
 ### Maze-Hard (assuming 4 L40S GPUs):
-
-```bash
-# Using uv run
-uv run pretrain-maze
-```
-
-Or directly:
 
 ```bash
 run_name="pretrain_att_maze30x30"
