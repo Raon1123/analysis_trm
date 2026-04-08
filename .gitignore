@@ -11,7 +11,6 @@ uv.lock
 
 # Datasets
 data/
-dataset/
 
 __pycache__/
 *.pyc
