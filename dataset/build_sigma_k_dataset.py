@@ -94,10 +94,10 @@ def make_example(n: int, k: int, rng: np.random.Generator):
     Returns two int32 arrays of length SEQ_LEN.
     """
     # Rejection-sample until ord(sigma) > k (guarantees effective depth = k).
-    while True:
-        sigma = rng.permutation(n)        # 0-indexed
-        if perm_order(sigma) > k:
-            break
+    #while True:
+    sigma = rng.permutation(n)        # 0-indexed
+    #    if perm_order(sigma) > k:
+    #        break
 
     x = int(rng.integers(0, n))          # 0-indexed query
     answer = apply_k_times(sigma, x, k)  # 0-indexed answer
@@ -121,8 +121,10 @@ def make_example(n: int, k: int, rng: np.random.Generator):
 def build_split(split_name: str, size: int, config: DataConfig, rng: np.random.Generator):
     inputs_list, labels_list = [], []
 
-    for _ in tqdm(range(size), desc=f"[{split_name}] n={config.n} k={config.k}"):
-        inp, lbl = make_example(config.n, config.k, rng)
+    for _ in tqdm(range(size), desc=f"[{split_name}] k={config.k}"):
+        # n is choosen random in [1, MAX_N] for each example to increase diversity.
+        n = rng.integers(1, MAX_N + 1).item()
+        inp, lbl = make_example(n, config.k, rng)
         inputs_list.append(inp)
         labels_list.append(lbl)
 
@@ -148,7 +150,7 @@ def build_split(split_name: str, size: int, config: DataConfig, rng: np.random.G
         sets=["all"],
     )
 
-    save_dir = os.path.join(config.output_dir, split_name)
+    save_dir = os.path.join(config.output_dir, str(config.k), split_name)
     os.makedirs(save_dir, exist_ok=True)
 
     with open(os.path.join(save_dir, "dataset.json"), "w") as f:
@@ -182,9 +184,12 @@ def build(config: DataConfig):
     with open(os.path.join(config.output_dir, "identifiers.json"), "w") as f:
         json.dump(["<blank>"], f)
 
-    rng = np.random.default_rng(config.seed)
-    build_split("train", config.train_size, config, rng)
-    build_split("test",  config.test_size,  config, rng)
+    for k in [1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 16, 20]:
+        config_k = config.model_copy(update={"k": k})
+        print(f"\nBuilding k={k} dataset...")
+        rng = np.random.default_rng(config.seed)
+        build_split("train", config.train_size, config_k, rng)
+        build_split("test",  config.test_size,  config_k, rng)
 
     print("Done.")
 
