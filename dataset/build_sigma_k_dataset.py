@@ -1,25 +1,24 @@
-"""Build the sigma^k dataset.
+"""Build the sigma^k dataset — Format D (full function I/O).
 
 Task:
-    Given a random permutation sigma on S = {1,...,n} and a query element x in S,
-    predict sigma^k(x) — the result of applying sigma exactly k times.
+    Given a random permutation sigma on S = {1,...,n},
+    predict the full function sigma^k: output[i] = sigma^k(i) for all i in S.
 
-Input sequence (length SEQ_LEN = MAX_N + 1 = 1001):
-    [x, sigma(1), sigma(2), ..., sigma(n), PAD, ..., PAD]
-    - position 0      : query x (1-indexed)
-    - positions 1..n  : permutation sigma (1-indexed)
-    - positions n+1.. : PAD (0)
+Input sequence (length SEQ_LEN = MAX_N + 1):
+    [sigma(1), sigma(2), ..., sigma(n), PAD, ..., PAD]
+    - positions 0..n-1 : permutation sigma (1-indexed)
+    - positions n..    : PAD (0)
 
 Label sequence (length SEQ_LEN):
-    [sigma^k(x), 0, 0, ..., 0]
-    - position 0 only is the prediction target (ignore_label_id=0 masks the rest)
+    [sigma^k(1), sigma^k(2), ..., sigma^k(n), PAD, ..., PAD]
+    - positions 0..n-1 : sigma^k values (all prediction targets, 1-indexed)
+    - positions n..    : PAD (0 = ignore_label_id, masked out by loss)
 
 Encoding: 1-indexed throughout (PAD = 0, elements 1..n).
-    No +1 shift needed at save time since values are already 1-indexed.
-    vocab_size = MAX_N + 1 = 1001.
+    vocab_size = MAX_N + 1.
 
-Permutation filter: only keep sigma with ord(sigma) > k,
-    ensuring effective composition depth equals k.
+Deduplication: each permutation sigma appears at most once per k-dataset.
+    Train and test splits are completely disjoint (no shared permutations).
 
 Format: identical to build_sudoku_dataset.py for pipeline compatibility.
 """
@@ -29,7 +28,6 @@ from __future__ import annotations
 import json
 import math
 import os
-from typing import Optional
 
 import numpy as np
 from argdantic import ArgParser
@@ -41,17 +39,17 @@ from common import PuzzleDatasetMetadata
 
 cli = ArgParser()
 
-MAX_N: int = 1000
-SEQ_LEN: int = MAX_N + 1       # 1001: query + full permutation (padded)
-VOCAB_SIZE: int = MAX_N + 1    # 1001: PAD=0, elements 1..MAX_N
+MAX_N: int = 20
+SEQ_LEN: int = MAX_N + 1       # 21: permutation (up to MAX_N positions) + 1 trailing PAD
+VOCAB_SIZE: int = MAX_N + 1    # 21: PAD=0, elements 1..MAX_N
 
 
 class DataConfig(BaseModel):
     output_dir: str = "data/sigma_k"
     k: int = 2           # composition depth k (fixed per dataset)
-    n: int = 100         # permutation size |S| = {1,...,n}, must be <= MAX_N
-    train_size: int = 50000
-    test_size: int = 5000
+    n: int = 20         # permutation size |S| = {1,...,n}, must be <= MAX_N
+    train_size: int = 5000
+    test_size: int = 1000
     seed: int = 42
 
 
@@ -76,40 +74,55 @@ def perm_order(sigma: np.ndarray) -> int:
     return ord_
 
 
-def apply_k_times(sigma: np.ndarray, x: int, k: int) -> int:
-    """Apply sigma to x exactly k times (0-indexed)."""
+def apply_sigma_k(sigma: np.ndarray, k: int) -> np.ndarray:
+    """Return sigma^k as an array: result[i] = sigma^k(i) (0-indexed)."""
+    result = np.arange(len(sigma))
     for _ in range(k):
-        x = int(sigma[x])
-    return x
+        result = sigma[result]
+    return result
+
+
+def sample_unique_permutations(n: int, total: int, rng: np.random.Generator,
+                                seen: set[bytes]) -> list[np.ndarray]:
+    """
+    Sample `total` permutations of [0..n-1] that are absent from `seen`.
+    Each sampled permutation is added to `seen` before returning.
+
+    Guarantee: every returned permutation is distinct and not in `seen` on entry.
+    The caller controls which slice goes to train vs. test, making disjointness
+    a structural property of the call site rather than an implicit side effect.
+    """
+    result: list[np.ndarray] = []
+    while len(result) < total:
+        sigma = rng.permutation(n)
+        key = sigma.tobytes()
+        if key not in seen:
+            seen.add(key)
+            result.append(sigma.copy())
+    return result
 
 
 # ---------------------------------------------------------------------------
 # Example generation
 # ---------------------------------------------------------------------------
 
-def make_example(n: int, k: int, rng: np.random.Generator):
+def make_example(n: int, k: int, sigma: np.ndarray):
     """
-    Sample one (input, label) pair.
+    Build (input, label) from a given 0-indexed permutation sigma.
 
-    Returns two int32 arrays of length SEQ_LEN.
+    Input:  [sigma(1), ..., sigma(n), PAD, ...]  1-indexed, length SEQ_LEN
+    Label:  [sigma^k(1), ..., sigma^k(n), PAD, ...]  1-indexed, length SEQ_LEN
+    PAD positions (>= n) remain 0 = ignore_label_id, masked out by loss.
     """
-    # Rejection-sample until ord(sigma) > k (guarantees effective depth = k).
-    #while True:
-    sigma = rng.permutation(n)        # 0-indexed
-    #    if perm_order(sigma) > k:
-    #        break
+    sigma_k = apply_sigma_k(sigma, k)
 
-    x = int(rng.integers(0, n))          # 0-indexed query
-    answer = apply_k_times(sigma, x, k)  # 0-indexed answer
-
-    # Build input (1-indexed; pad with 0)
+    # Build input (1-indexed; positions n.. stay 0 = PAD)
     inp = np.zeros(SEQ_LEN, dtype=np.int32)
-    inp[0] = x + 1                # query: 1-indexed
-    inp[1:n + 1] = sigma + 1      # permutation: 1-indexed; positions n+1.. stay 0
+    inp[:n] = sigma + 1
 
-    # Build label (only position 0 is the prediction target)
+    # Build label (1-indexed; PAD positions stay 0 = ignore_label_id)
     lbl = np.zeros(SEQ_LEN, dtype=np.int32)
-    lbl[0] = answer + 1           # 1-indexed answer
+    lbl[:n] = sigma_k + 1
 
     return inp, lbl
 
@@ -118,13 +131,18 @@ def make_example(n: int, k: int, rng: np.random.Generator):
 # Split builder
 # ---------------------------------------------------------------------------
 
-def build_split(split_name: str, size: int, config: DataConfig, rng: np.random.Generator):
+def build_split(split_name: str, config: DataConfig,
+                sigmas: list[np.ndarray]):
+    """
+    Build one split from a pre-sampled list of unique permutations.
+
+    Permutations are supplied externally (already deduplicated and split),
+    so this function has no sampling logic and no shared state.
+    """
     inputs_list, labels_list = [], []
 
-    for _ in tqdm(range(size), desc=f"[{split_name}] k={config.k}"):
-        # n is choosen random in [1, MAX_N] for each example to increase diversity.
-        n = rng.integers(1, MAX_N + 1).item()
-        inp, lbl = make_example(n, config.k, rng)
+    for sigma in tqdm(sigmas, desc=f"[{split_name}] k={config.k}"):
+        inp, lbl = make_example(config.n, config.k, sigma)
         inputs_list.append(inp)
         labels_list.append(lbl)
 
@@ -177,7 +195,7 @@ def build(config: DataConfig):
     assert 1 <= config.n <= MAX_N, f"n must be in [1, {MAX_N}], got {config.n}"
     assert config.k >= 1,          f"k must be >= 1, got {config.k}"
 
-    print(f"sigma^k dataset  n={config.n}  k={config.k}  "
+    print(f"sigma^k dataset (Format D)  n={config.n}  "
           f"train={config.train_size}  test={config.test_size}")
 
     os.makedirs(config.output_dir, exist_ok=True)
@@ -188,8 +206,19 @@ def build(config: DataConfig):
         config_k = config.model_copy(update={"k": k})
         print(f"\nBuilding k={k} dataset...")
         rng = np.random.default_rng(config.seed)
-        build_split("train", config.train_size, config_k, rng)
-        build_split("test",  config.test_size,  config_k, rng)
+
+        # Sample train + test together from a single unique pool.
+        # Slicing is the only mechanism that assigns permutations to splits,
+        # so train ∩ test = ∅ is guaranteed by construction.
+        seen: set[bytes] = set()
+        total = config.train_size + config.test_size
+        all_sigmas = sample_unique_permutations(config.n, total, rng, seen)
+
+        train_sigmas = all_sigmas[:config.train_size]
+        test_sigmas  = all_sigmas[config.train_size:]
+
+        build_split("train", config_k, train_sigmas)
+        build_split("test",  config_k, test_sigmas)
 
     print("Done.")
 
