@@ -83,7 +83,7 @@ def apply_sigma_k(sigma: np.ndarray, k: int) -> np.ndarray:
 
 
 def sample_unique_permutations(n: int, total: int, rng: np.random.Generator,
-                                seen: set[bytes]) -> list[np.ndarray]:
+                                seen: set[bytes], k: int) -> list[np.ndarray]:
     """
     Sample `total` permutations of [0..n-1] that are absent from `seen`.
     Each sampled permutation is added to `seen` before returning.
@@ -95,6 +95,9 @@ def sample_unique_permutations(n: int, total: int, rng: np.random.Generator,
     result: list[np.ndarray] = []
     while len(result) < total:
         sigma = rng.permutation(n)
+        # filtering with a order of sigma is less then k, because sigma^k = id, so it is not a valid example for k > 1
+        if perm_order(sigma) <= k:
+            continue
         key = sigma.tobytes()
         if key not in seen:
             seen.add(key)
@@ -212,7 +215,7 @@ def build(config: DataConfig):
         # so train ∩ test = ∅ is guaranteed by construction.
         seen: set[bytes] = set()
         total = config.train_size + config.test_size
-        all_sigmas = sample_unique_permutations(config.n, total, rng, seen)
+        all_sigmas = sample_unique_permutations(config.n, total, rng, seen, config.k)
 
         train_sigmas = all_sigmas[:config.train_size]
         test_sigmas  = all_sigmas[config.train_size:]
