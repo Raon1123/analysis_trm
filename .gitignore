@@ -6,8 +6,9 @@ venv/
 wandb/
 checkpoints/
 logs/
-scripts/
+scripts/*
 !scripts/queue_run.sh
+!scripts/sigma_enqueue.sh
 
 # uv
 uv.lock
