@@ -7,6 +7,7 @@ wandb/
 checkpoints/
 logs/
 scripts/
+!scripts/queue_run.sh
 
 # uv
 uv.lock
