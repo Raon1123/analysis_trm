@@ -39,15 +39,15 @@ from common import PuzzleDatasetMetadata
 
 cli = ArgParser()
 
-MAX_N: int = 20
-SEQ_LEN: int = MAX_N + 1       # 21: permutation (up to MAX_N positions) + 1 trailing PAD
-VOCAB_SIZE: int = MAX_N + 1    # 21: PAD=0, elements 1..MAX_N
+MAX_N: int = 10
+SEQ_LEN: int = MAX_N + 1       # 11: permutation (up to MAX_N positions) + 1 trailing PAD
+VOCAB_SIZE: int = MAX_N + 1    # 11: PAD=0, elements 1..MAX_N
 
 
 class DataConfig(BaseModel):
-    output_dir: str = "data/sigma_k"
+    output_dir: str = "data/sigma_k_10"
     k: int = 2           # composition depth k (fixed per dataset)
-    n: int = 20         # permutation size |S| = {1,...,n}, must be <= MAX_N
+    n: int = 10         # permutation size |S| = {1,...,n}, must be <= MAX_N
     train_size: int = 5000
     test_size: int = 1000
     seed: int = 42
@@ -205,7 +205,7 @@ def build(config: DataConfig):
     with open(os.path.join(config.output_dir, "identifiers.json"), "w") as f:
         json.dump(["<blank>"], f)
 
-    for k in [1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 16, 20]:
+    for k in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 16, 20]:
         config_k = config.model_copy(update={"k": k})
         print(f"\nBuilding k={k} dataset...")
         rng = np.random.default_rng(config.seed)

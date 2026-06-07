@@ -6,6 +6,7 @@ venv/
 wandb/
 checkpoints/
 logs/
+scripts/
 
 # uv
 uv.lock
