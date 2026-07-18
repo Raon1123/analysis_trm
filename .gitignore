@@ -6,9 +6,26 @@ venv/
 wandb/
 checkpoints/
 logs/
-scripts/*
-!scripts/queue_run.sh
-!scripts/sigma_enqueue.sh
+# scripts는 추적 (큐 런타임 상태만 제외)
+scripts/queue/
+
+lab/
+reports/
+research_mcp/
+scripts/
+
+.claude/
+.codex/
+
+# 생성 산출물
+results/
+reports/*.zip
+
+# Lean/mathlib 빌드 툴체인 (7.3G — 산문 아님)
+lab/theory/**/lean/
+
+# 머신 로컬 권한 설정
+.claude/settings.local.json
 
 # uv
 uv.lock
