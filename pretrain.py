@@ -23,6 +23,7 @@ from puzzle_dataset import PuzzleDataset, PuzzleDatasetConfig, PuzzleDatasetMeta
 from utils.functions import load_model_class, get_model_source_path
 from models.sparse_embedding import CastedSparseEmbeddingSignSGD_Distributed
 from models.ema import EMAHelper
+from utils.z_logging import ZDynamicsLogger
 
 
 class LossConfig(pydantic.BaseModel):
@@ -82,6 +83,13 @@ class PretrainConfig(pydantic.BaseModel):
     ema: bool = False # use Exponential-Moving-Average
     ema_rate: float = 0.999 # EMA-rate
     freeze_weights: bool = False # If True, freeze weights and only learn the embeddings
+
+    # z-dynamics logging (off by default — zero overhead when False)
+    log_z_dynamics: bool = False
+    z_probe_size: int = 512
+    z_snapshot: bool = True
+    phase_threshold: float = 0.999
+    phase_patience: int = 2
 
 @dataclass
 class TrainState:
@@ -585,11 +593,30 @@ def launch(hydra_config: DictConfig):
     # Progress bar and logger
     progress_bar = None
     ema_helper = None
+    z_logger = None
     if RANK == 0:
         progress_bar = tqdm.tqdm(total=train_state.total_steps)
         wandb.init(project=config.project_name, name=config.run_name, config=config.model_dump(), settings=wandb.Settings(_disable_stats=True))  # type: ignore
         wandb.log({"num_params": sum(x.numel() for x in train_state.model.parameters())}, step=0)
         save_code_and_config(config)
+        if config.log_z_dynamics:
+            # Load dataset.json to get ignore_label_id for label remap
+            import json as _json
+            _ds_meta_path = os.path.join(config.data_paths[0], "train", "dataset.json")
+            with open(_ds_meta_path) as _f:
+                _ds_meta = _json.load(_f)
+            _ignore_label_id_in_file = _ds_meta.get("ignore_label_id", None)
+            _snap_path = config.checkpoint_path if config.z_snapshot else None
+            z_logger = ZDynamicsLogger(
+                data_path=config.data_paths[0],
+                probe_size=config.z_probe_size,
+                ignore_label_id_in_file=_ignore_label_id_in_file,
+                phase_threshold=config.phase_threshold,
+                phase_patience=config.phase_patience,
+                checkpoint_path=_snap_path,
+            )
+            if config.ema:
+                print("[z_logging] Probe will use EMA model copy for evaluation.")
     if config.ema:
         print('Setup EMA')
         ema_helper = EMAHelper(mu=config.ema_rate)
@@ -634,7 +661,17 @@ def launch(hydra_config: DictConfig):
 
             if RANK == 0 and metrics is not None:
                 wandb.log(metrics, step=train_state.step)
-                
+
+            ############ z dynamics logging (rank 0 only, no-op when log_z_dynamics=False)
+            if z_logger is not None:
+                import functools as _functools
+                z_logger.log(
+                    model=train_state_eval.model,
+                    step=train_state.step,
+                    save_train_state_fn=_functools.partial(save_train_state, config),
+                    train_state=train_state_eval,
+                )
+
             ############ Checkpointing
             if RANK == 0:
                 print("SAVE CHECKPOINT")

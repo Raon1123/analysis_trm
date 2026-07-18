@@ -13,9 +13,13 @@ lab/
 reports/
 research_mcp/
 scripts/
+docs/
+analysis/
+90_Daily/
 
 .claude/
 .codex/
+.agents/
 
 # 생성 산출물
 results/

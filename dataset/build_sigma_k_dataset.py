@@ -51,6 +51,14 @@ class DataConfig(BaseModel):
     train_size: int = 5000
     test_size: int = 1000
     seed: int = 42
+    # EXP-007(20260703): only_k>0 builds that single k (default 0 = original full list).
+    # PROVENANCE WARNING: the sampling filter has always used config.k (default 2), not
+    # the loop k — so every on-disk dir is "ord<=2 filtered" only (verified 2026-07-03:
+    # 0 perms of ord 1-2 in k=3/k=9 samples, yet 50% ord<=9 present in k=9). To build a
+    # new k provenance-identical to existing dirs, leave k=2 and order_filter=True and
+    # set only_k=<new k>. Do NOT "fix" the filter without rebuilding everything.
+    only_k: int = 0
+    order_filter: bool = True
 
 
 # ---------------------------------------------------------------------------
@@ -83,7 +91,8 @@ def apply_sigma_k(sigma: np.ndarray, k: int) -> np.ndarray:
 
 
 def sample_unique_permutations(n: int, total: int, rng: np.random.Generator,
-                                seen: set[bytes], k: int) -> list[np.ndarray]:
+                                seen: set[bytes], k: int,
+                                order_filter: bool = True) -> list[np.ndarray]:  # EXP-007(20260703)
     """
     Sample `total` permutations of [0..n-1] that are absent from `seen`.
     Each sampled permutation is added to `seen` before returning.
@@ -96,7 +105,7 @@ def sample_unique_permutations(n: int, total: int, rng: np.random.Generator,
     while len(result) < total:
         sigma = rng.permutation(n)
         # filtering with a order of sigma is less then k, because sigma^k = id, so it is not a valid example for k > 1
-        if perm_order(sigma) <= k:
+        if order_filter and perm_order(sigma) <= k:  # EXP-007(20260703): bypassable
             continue
         key = sigma.tobytes()
         if key not in seen:
@@ -205,7 +214,9 @@ def build(config: DataConfig):
     with open(os.path.join(config.output_dir, "identifiers.json"), "w") as f:
         json.dump(["<blank>"], f)
 
-    for k in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 16, 20]:
+    # EXP-007(20260703): only_k>0 restricts the build to that single k
+    k_list = [config.only_k] if config.only_k > 0 else [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 16, 20]
+    for k in k_list:
         config_k = config.model_copy(update={"k": k})
         print(f"\nBuilding k={k} dataset...")
         rng = np.random.default_rng(config.seed)
@@ -215,7 +226,13 @@ def build(config: DataConfig):
         # so train ∩ test = ∅ is guaranteed by construction.
         seen: set[bytes] = set()
         total = config.train_size + config.test_size
-        all_sigmas = sample_unique_permutations(config.n, total, rng, seen, config.k)
+        # NOTE(EXP-007, 20260703): `config.k` (NOT config_k.k) is deliberate — the original
+        # code passed config.k (default 2) here for every k in the loop, so ALL on-disk
+        # sigma_k_10 dirs were built with an ord<=2 filter only (verified: 0 perms of
+        # ord 1-2 in k=3 and k=9 samples, but 50% ord<=9 in k=9). Preserving this exact
+        # call keeps new single-k builds provenance-identical to existing dirs.
+        all_sigmas = sample_unique_permutations(config.n, total, rng, seen, config.k,
+                                                config.order_filter)
 
         train_sigmas = all_sigmas[:config.train_size]
         test_sigmas  = all_sigmas[config.train_size:]
