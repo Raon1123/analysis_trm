@@ -45,18 +45,18 @@ VOCAB_SIZE: int = MAX_N + 1    # 11: PAD=0, elements 1..MAX_N
 
 
 class DataConfig(BaseModel):
-    output_dir: str = "data/sigma_k_10"
+    output_dir: str = "data/sigma_k"
     k: int = 2           # composition depth k (fixed per dataset)
     n: int = 10         # permutation size |S| = {1,...,n}, must be <= MAX_N
     train_size: int = 5000
     test_size: int = 1000
     seed: int = 42
     # EXP-007(20260703): only_k>0 builds that single k (default 0 = original full list).
-    # PROVENANCE WARNING: the sampling filter has always used config.k (default 2), not
-    # the loop k — so every on-disk dir is "ord<=2 filtered" only (verified 2026-07-03:
-    # 0 perms of ord 1-2 in k=3/k=9 samples, yet 50% ord<=9 present in k=9). To build a
-    # new k provenance-identical to existing dirs, leave k=2 and order_filter=True and
-    # set only_k=<new k>. Do NOT "fix" the filter without rebuilding everything.
+    # PROVENANCE HISTORY: until 2026-07-20 the sampling filter used config.k (default 2),
+    # not the loop k, so all pre-rebuild dirs were "ord<=2 filtered" only. FIXED + full
+    # rebuild 2026-07-20/21: every data/sigma_k_10/<k> (and data/sigma_k/<k>) is now
+    # ord(σ)>k filtered (verified: min order = k+1 per dir; k=11 rebuilt 07-21, min=12).
+    # Checkpoints/figures trained BEFORE 2026-07-20 13:18 used the buggy ord<=2 data.
     only_k: int = 0
     order_filter: bool = True
 
@@ -215,7 +215,7 @@ def build(config: DataConfig):
         json.dump(["<blank>"], f)
 
     # EXP-007(20260703): only_k>0 restricts the build to that single k
-    k_list = [config.only_k] if config.only_k > 0 else [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 16, 20]
+    k_list = [config.only_k] if config.only_k > 0 else [3, 4, 5, 6, 7, 8, 10]
     for k in k_list:
         config_k = config.model_copy(update={"k": k})
         print(f"\nBuilding k={k} dataset...")
@@ -226,16 +226,26 @@ def build(config: DataConfig):
         # so train ∩ test = ∅ is guaranteed by construction.
         seen: set[bytes] = set()
         total = config.train_size + config.test_size
-        # NOTE(EXP-007, 20260703): `config.k` (NOT config_k.k) is deliberate — the original
-        # code passed config.k (default 2) here for every k in the loop, so ALL on-disk
-        # sigma_k_10 dirs were built with an ord<=2 filter only (verified: 0 perms of
-        # ord 1-2 in k=3 and k=9 samples, but 50% ord<=9 in k=9). Preserving this exact
-        # call keeps new single-k builds provenance-identical to existing dirs.
-        all_sigmas = sample_unique_permutations(config.n, total, rng, seen, config.k,
+        
+        # NOTE(EXP-007): fixed 2026-07-20 — passes the per-iteration config_k.k so the
+        # ord(σ)>k filter matches each dataset's own k. (The original bug passed the
+        # top-level config.k default 2 here, leaving all pre-07-20 dirs ord<=2-filtered
+        # only; see DataConfig.only_k provenance history above.) Consequence of the fix:
+        # permutation pools are no longer byte-identical across k-dirs (each k rejects a
+        # different subset), unlike the pre-rebuild data.
+        all_sigmas = sample_unique_permutations(config.n, total, rng, seen, config_k.k,
                                                 config.order_filter)
 
         train_sigmas = all_sigmas[:config.train_size]
         test_sigmas  = all_sigmas[config.train_size:]
+        
+        # verify random sampling of order
+        if config.order_filter:
+            train_orders = [perm_order(sigma) for sigma in train_sigmas]
+            test_orders  = [perm_order(sigma) for sigma in test_sigmas]
+            # min/max order of train/test splits
+            print(f"  train orders: min={min(train_orders)}, max={max(train_orders)}")
+            print(f"  test orders:  min={min(test_orders)}, max={max(test_orders)}")
 
         build_split("train", config_k, train_sigmas)
         build_split("test",  config_k, test_sigmas)

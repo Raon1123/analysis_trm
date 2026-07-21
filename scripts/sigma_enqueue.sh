@@ -29,39 +29,110 @@ RUN_PREFIX="${1:-}"
 prefix=""
 [[ -n "$RUN_PREFIX" ]] && prefix="${RUN_PREFIX}_"
 
-# ====================  EDIT BELOW: sweep definitions  ====================
+# ====================  EDIT BELOW: fig1 cohort grid  ====================
+# Target = the fig1 accuracy grid (analysis/make_mlp_grid_figure.py + tf_vs_mlp_grid),
+# re-run on the ORDER-FILTER-FIXED data (data/sigma_k_10 = ord(σ)>k, EXP-007 fix).
+# Legacy fig1 lived in project Sigma_k_fig12 on data/sigma_k_10; this is the clean
+# re-run under Sigma_k_new. Run names match legacy so the figure code is unchanged.
+#
+# 8 cohorts = block {mlp,tf} × z {z,noz} × iter {iter,noiter}:
+#   block:  mlp -> arch.mlp_t=True    | tf  -> arch.mlp_t=False
+#   z:      z   -> arch=trm (z-carry) | noz -> arch=trm_singlez (no z)
+#   iter:   iter-> H_cycles=3 L_cycles=6 | noiter -> H_cycles=1 L_cycles=1
+#   fixed across all: arch.L_layers=2, arch.halt_max_steps=1  (matches legacy fig1)
+# Single seed (=1) for a fast grid; add 2 3 to SEEDS later for min/max bands.
 
-WANDB_PROJECT="Sigma_k"
-K_LIST=(6 7 8 10 12 16 20)
+WANDB_PROJECT="Sigma_k_new"
+K_LIST=(3 4 5 6 7 8 10)
+SEEDS=(1)
+DATA_ROOT="data/sigma_k_10"          # canonical n=10, ord(σ)>k-clean (EXP-007 fixed)
 
-common_args="epochs=100000 eval_interval=5000 lr=1e-4 puzzle_emb_lr=1e-4 weight_decay=1.0 puzzle_emb_weight_decay=1.0"
+# Protocol-matched to legacy fig1 all_config.yaml (Sigma_k_fig12), verified 2026-07-21:
+#   eval_interval=2000 (NOT 5000), log_z_dynamics=True (gates probe/test_exact —
+#   the figure's primary metric, z_logging.py:378), z_snapshot=False,
+#   checkpoint_every_eval=False (cfg default True would checkpoint every eval).
+# (+ prefix: log_z_dynamics / z_snapshot are pretrain.py pydantic fields NOT in
+#  cfg_pretrain.yaml — Hydra struct mode rejects bare overrides for absent keys.)
+common_args="epochs=100000 eval_interval=2000 lr=1e-4 puzzle_emb_lr=1e-4 weight_decay=1.0 puzzle_emb_weight_decay=1.0 +log_z_dynamics=True +z_snapshot=False checkpoint_every_eval=False"
 
-# "alias=hydra.param: candidates..."  — add/remove candidates to change the grid.
-TRM_SWEEP=(
-    "halt=arch.halt_max_steps: 1 8 16"
-    "Llay=arch.L_layers: 2"
-    "H=arch.H_cycles: 3 6"
-    "L=arch.L_cycles: 3 6"
+# tag | arch | mlp_t | H_cycles | L_cycles
+COHORTS=(
+    "mlp_z_iter|trm|True|3|6"
+    "mlp_z_noiter|trm|True|1|1"
+    "mlp_noz_iter|trm_singlez|True|3|6"
+    "mlp_noz_noiter|trm_singlez|True|1|1"
+    "tf_z_iter|trm|False|3|6"
+    "tf_z_noiter|trm|False|1|1"
+    "tf_noz_iter|trm_singlez|False|3|6"
+    "tf_noz_noiter|trm_singlez|False|1|1"
 )
 
-TRANSFORMER_SWEEP=(
-    "lay=arch.H_layers: 1 2 6"
-    "cyc=arch.H_cycles: 1 6"
+# ---- Module ablations (FIFO priority AFTER the fig1 grid) -----------------
+# One-factor-at-a-time around the canonical TRM baseline fig1_tf_z_iter
+# (arch=trm, mlp_t=False, H3, L6, L_layers=2, halt=1); axis values taken from
+# the pre-fig1 exploratory sweep (halt {8,16}, H {6}, L {3}).  Cells equal to
+# the baseline itself are already covered by fig1 — not re-enqueued.
+#   tag | extra arch overrides (vs baseline)
+TRM_ABLATIONS=(
+    "halt8|arch.halt_max_steps=8"
+    "halt16|arch.halt_max_steps=16"
+    "H6|arch.H_cycles=6"
+    "L3|arch.L_cycles=3"
 )
+# transformers_baseline depth/width ablation (old TRANSFORMER_SWEEP grid).
+# arch.halt_max_steps=1 pinned — tfb yaml defaults to 16, which the old sweep
+# left in place (protocol mismatch vs fig1); here every run is halt=1.
+TFB_LAYERS=(1 2 6)
+TFB_CYCLES=(1 6)
+
+# emit_job <run_name> <arch> <k> <seed> <arch_args...>
+emit_job() {
+    local run_name="$1" arch="$2" k="$3" s="$4"; shift 4
+    enqueue "$run_name" <<EOF
+uv run pretrain.py arch=${arch} ${common_args} \\
+    $* \\
+    evaluators="[]" \\
+    data_paths="[${DATA_ROOT}/${k}]" \\
+    seed=${s} \\
+    +k=${k} \\
+    +project_name="${WANDB_PROJECT}" \\
+    +run_name="${run_name}" \\
+    ema=True
+EOF
+}
 
 main() {
-    local k
+    local k spec tag arch arch_args mlp_t Hc Lc s lay cyc
+    # -- 1) fig1 grid (highest priority: lowest sequence numbers) --
     for k in "${K_LIST[@]}"; do
-        # enqueue_grid <name_prefix> <tag> <base_cmd> <data_path> <sweep_array_name>
-        enqueue_grid "${prefix}k${k}" "trm" \
-            "uv run pretrain.py arch=trm $common_args" \
-            "data/sigma_k_10/${k}" TRM_SWEEP
-
-        # NOTE: the old script used data/sigma_k/ (not _10) for the deep
-        # transformer baselines — unify or change here as needed.
-        enqueue_grid "${prefix}k${k}" "tf" \
-            "uv run pretrain.py arch=transformers_baseline $common_args" \
-            "data/sigma_k_10/${k}" TRANSFORMER_SWEEP
+        for spec in "${COHORTS[@]}"; do
+            IFS='|' read -r tag arch mlp_t Hc Lc <<< "$spec"
+            for s in "${SEEDS[@]}"; do
+                emit_job "${prefix}fig1_${tag}_k${k}_s${s}" "$arch" "$k" "$s" \
+                    "arch.mlp_t=${mlp_t} arch.H_cycles=${Hc} arch.L_cycles=${Lc}" \
+                    "arch.L_layers=2 arch.halt_max_steps=1"
+            done
+        done
+    done
+    # -- 2) module ablations (appended: run only after fig1 drains) --
+    for k in "${K_LIST[@]}"; do
+        for spec in "${TRM_ABLATIONS[@]}"; do
+            IFS='|' read -r tag arch_args <<< "$spec"
+            for s in "${SEEDS[@]}"; do
+                emit_job "${prefix}abl_${tag}_k${k}_s${s}" "trm" "$k" "$s" \
+                    "arch.mlp_t=False arch.H_cycles=3 arch.L_cycles=6" \
+                    "arch.L_layers=2 arch.halt_max_steps=1 ${arch_args}"
+            done
+        done
+        for lay in "${TFB_LAYERS[@]}"; do
+            for cyc in "${TFB_CYCLES[@]}"; do
+                for s in "${SEEDS[@]}"; do
+                    emit_job "${prefix}abl_tfb_lay${lay}_cyc${cyc}_k${k}_s${s}" \
+                        "transformers_baseline" "$k" "$s" \
+                        "arch.H_layers=${lay} arch.H_cycles=${cyc} arch.halt_max_steps=1"
+                done
+            done
+        done
     done
 }
 
@@ -89,7 +160,18 @@ seq_next() {
 }
 
 # enqueue <name>  — job body comes from stdin (heredoc)
+# Idempotent: a cell whose run_name already exists anywhere in the queue
+# lifecycle (queued / running / done / failed) is skipped, so re-running the
+# script after edits only adds the missing cells.
 enqueue() {
+    if compgen -G "$JOBS_DIR/*_$1.job" >/dev/null \
+       || compgen -G "$QUEUE_DIR/processing/*_$1.job.gpu*" >/dev/null \
+       || compgen -G "$QUEUE_DIR/done/*_$1.job" >/dev/null \
+       || compgen -G "$QUEUE_DIR/failed/*_$1.job" >/dev/null; then
+        echo "skip (already in queue lifecycle): $1"
+        cat > /dev/null
+        return
+    fi
     if (( DRY_RUN )); then
         printf '%04d %s\n' "$SEQ" "$1"
         cat > /dev/null

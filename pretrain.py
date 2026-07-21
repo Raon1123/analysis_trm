@@ -75,6 +75,9 @@ class PretrainConfig(pydantic.BaseModel):
 
     # Extras
     seed: int = 0
+    # σ^k composition depth — metadata only (training never reads it); pass +k=<k>
+    # so wandb config carries k/seed filterable columns instead of parsing run names.
+    k: Optional[int] = None
     checkpoint_every_eval: bool = False
     eval_interval: Optional[int] = None
     min_eval_interval: Optional[int] = 0 # when to start eval

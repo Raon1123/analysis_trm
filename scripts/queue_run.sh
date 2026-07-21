@@ -10,9 +10,14 @@
 #
 # Usage:
 #   scripts/queue_run.sh                 # workers on GPUs 4 5 6 7
-#   GPUS="0 1" scripts/queue_run.sh      # override GPU set
+#   GPUS="5 6" scripts/queue_run.sh      # subset of the allowed GPUs
+#   scripts/queue_run.sh dry-run         # preview launch (GPUs, FIFO order), run nothing
 #   scripts/queue_run.sh status          # show queued / running / done / failed
 #   touch scripts/queue/stop             # drain: exit when jobs/ is empty
+#
+# GPU convention: this box is shared — queue workers may only claim GPUs 4-7.
+# GPUS outside that set is refused at startup; FORCE_GPUS=1 bypasses (do not
+# use casually: GPUs 0-3 belong to other users' jobs).
 #
 # Job file = plain bash script. The runner executes it with
 # CUDA_VISIBLE_DEVICES pinned to the worker's GPU and logs to logs/queue/.
@@ -22,6 +27,19 @@ set -u -o pipefail
 QUEUE_DIR="${QUEUE_DIR:-scripts/queue}"
 GPUS="${GPUS:-4 5 6 7}"
 POLL_S="${POLL_S:-10}"
+
+# GPU convention guard (see header): refuse GPUs outside the allowed set.
+ALLOWED_GPUS="4 5 6 7"
+if [[ "${FORCE_GPUS:-0}" != "1" ]]; then
+    for g in $GPUS; do
+        case " $ALLOWED_GPUS " in
+            *" $g "*) ;;
+            *) echo "ERROR: GPU $g is outside the allowed set {$ALLOWED_GPUS}." >&2
+               echo "       GPUs 0-3 belong to other users. FORCE_GPUS=1 to override." >&2
+               exit 1 ;;
+        esac
+    done
+fi
 
 JOBS_DIR="$QUEUE_DIR/jobs"
 PROC_DIR="$QUEUE_DIR/processing"
@@ -41,6 +59,26 @@ if [[ "${1:-}" == "status" ]]; then
     ls -1 "$PROC_DIR" 2>/dev/null || true
     echo "== done: $(ls -1 "$DONE_DIR" 2>/dev/null | wc -l)  failed: $(ls -1 "$FAIL_DIR" 2>/dev/null | wc -l) =="
     ls -1 "$FAIL_DIR" 2>/dev/null || true
+    exit 0
+fi
+
+# Preview what a real launch would do — GPU set (already validated by the
+# guard above), startup side effects, and the FIFO claim order. Runs nothing.
+if [[ "${1:-}" == "dry-run" ]]; then
+    n_workers=$(wc -w <<< "$GPUS")
+    echo "== dry run: nothing will be executed =="
+    echo "workers: $n_workers (GPUs: $GPUS)   poll: ${POLL_S}s"
+    n_stale=$(ls -1 "$PROC_DIR"/*.job.gpu* 2>/dev/null | wc -l)
+    (( n_stale > 0 )) && echo "startup would recover $n_stale stale processing/ job(s) into jobs/"
+    [[ -e "$STOP_FILE" ]] && echo "startup would remove leftover stop file"
+    echo "== FIFO order (first $n_workers claim a GPU immediately) =="
+    i=0
+    for f in "$JOBS_DIR"/*.job; do
+        [[ -e "$f" ]] || continue
+        i=$((i + 1))
+        printf '%4d. %s\n' "$i" "$(basename "$f" .job)"
+    done
+    echo "== total queued: $i =="
     exit 0
 fi
 
