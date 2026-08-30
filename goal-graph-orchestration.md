@@ -900,7 +900,7 @@ Windows 전역 경로와 `~/.codex/`는 이 서버의 sync 신뢰 경계 밖이�
    ├─ terra-verifier.toml
    ├─ luna-worker.toml
    └─ luna-verifier.toml
-└─ lab/goal-state/<goal-id>/
+└─ lab/11_governance/13_goal-state/<goal-id>/
 ```
 
 프로젝트 `AGENTS.md`에는 이 문서를 가리키는 짧은 적용 규칙만 둔다. 상세 규칙을 복제하지
