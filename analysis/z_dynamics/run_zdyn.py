@@ -450,6 +450,8 @@ def main(argv=None) -> int:
         g5 = {"unit": g5_unit, "ran": False, "identical": None}
         if not a.no_g5 and g5_first is not None:
             t0 = time.time()
+            stats._OMEGA_CACHE.clear()          # cold re-run: no cached ω or σ structures (G5 end-to-end)
+            readouts._cached_info.cache_clear()
             again = process_cell(next(r for r in rows if r["run_name"] == g5_unit), a, closeout)
             second = {k2: rows_to_text(again[k2], files[k2][1]) for k2 in ("per_call", "pr", "cell")}
             diffs = {k2: g5_first[k2] != second[k2] for k2 in second}
