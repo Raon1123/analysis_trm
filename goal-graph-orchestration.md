@@ -883,7 +883,9 @@ Sol은 사전등록된 결정 규칙과 전체 실험 그래프를 고정한다.
 - 원격 실행과 실험 변경은 별도의 승인 및 실험 생명주기 계약을 따른다.
 - BibTeX 키를 발명하지 않는다. 미해결 인용은 `[NEEDCITE: author year topic]`으로 남긴다.
 
-## 24. Codex 구현 표면
+## 24. Codex 구현 표면 — **폐기(2026-09-23, 사용자 결정: Codex를 파이프라인에서 전면 제외)**
+
+> 아래는 역사 기록이다. 이 서버의 실행 표면은 Claude Code project-local(`.claude/agents`, `.claude/commands`)뿐이며, `.codex/`·`codex exec`·`codex-verify`/`codex-audit`는 어떤 단계에서도 호출하지 않는다. 검증 사다리는 sonnet → opus.
 
 승인된 설계는 이 서버의 내구성 있는 프로젝트 로컬 Codex 표면에 다음 파일로 구현한다.
 Windows 전역 경로와 `~/.codex/`는 이 서버의 sync 신뢰 경계 밖이므로 사용하지 않는다.

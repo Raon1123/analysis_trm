@@ -4,7 +4,15 @@ HRM ACT V2: Transformer Baseline for Architecture Ablation
 This is an architecture ablation of the Hierarchical Reasoning Model (HRM).
 Key changes from V1:
 1. REMOVED hierarchical split (no separate H and L levels)
-2. REMOVED inner cycles (no H_cycles/L_cycles loops within reasoning)
+2. REMOVED inner cycles (no H_cycles/L_cycles loops within reasoning).
+   H_cycles is still a NO-OP here and is not repurposed. An OPTIONAL
+   weight-tied loop is available instead via `loops > 1`: the whole H_layers
+   stack is re-applied `loops` times inside one forward (looped-transformer
+   control). `loop_input_injection` re-adds the input embedding at every loop
+   (else only at loop 0); `loop_grad_cycles = n > 0` runs the first
+   loops - n loops under torch.no_grad() (TRM-style truncated backprop),
+   0 = full backprop through every loop. loops=1 (default) is bit-identical
+   to the original single-pass stack.
 3. KEPT ACT outer loop structure intact
 4. KEPT all data preprocessing, embeddings, and evaluation infrastructure
 
@@ -20,7 +28,7 @@ import math
 import torch
 import torch.nn.functional as F
 from torch import nn
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 from models.common import trunc_normal_init_
 from models.layers import rms_norm, SwiGLU, Attention, RotaryEmbedding, CosSin, CastedEmbedding, CastedLinear
@@ -53,6 +61,12 @@ class Model_ACTV2Config(BaseModel):
 
     H_layers: int
 
+    # Weight-tied loop over the whole H_layers stack (looped-transformer control).
+    # loops=1 reproduces the original single-pass stack exactly.
+    loops: int = 1
+    loop_input_injection: bool = True  # add input embeddings at every loop (else only at loop 0)
+    loop_grad_cycles: int = 0  # 0 = full backprop through all loops; n>0 = grad only through the last n loops
+
     # Transformer config
     hidden_size: int
     expansion: float
@@ -69,6 +83,17 @@ class Model_ACTV2Config(BaseModel):
     act_inference: bool = False  # If True, use adaptive computation during inference
 
     forward_dtype: str = "bfloat16"
+
+    @model_validator(mode="after")
+    def _check_loops(self):
+        if self.loops < 1:
+            raise ValueError(f"loops must be >= 1, got {self.loops}")
+        if not (0 <= self.loop_grad_cycles <= self.loops):
+            raise ValueError(
+                f"loop_grad_cycles must satisfy 0 <= loop_grad_cycles <= loops, "
+                f"got loop_grad_cycles={self.loop_grad_cycles}, loops={self.loops}"
+            )
+        return self
 
 
 class Model_ACTV2Block(nn.Module):
@@ -106,9 +131,10 @@ class Model_ACTV2ReasoningModule(nn.Module):
 
         self.layers = torch.nn.ModuleList(layers)
 
-    def forward(self, hidden_states: torch.Tensor, input_injection: torch.Tensor, **kwargs) -> torch.Tensor:
-        # Input injection (add)
-        hidden_states = hidden_states + input_injection
+    def forward(self, hidden_states: torch.Tensor, input_injection: Optional[torch.Tensor], **kwargs) -> torch.Tensor:
+        # Input injection (add); skipped when None (loop_input_injection=False, loops >= 1)
+        if input_injection is not None:
+            hidden_states = hidden_states + input_injection
         # Layers
         for layer in self.layers:
             hidden_states = layer(hidden_states=hidden_states, **kwargs)
@@ -229,8 +255,22 @@ class Model_ACTV2_Inner(nn.Module):
         # Input encoding
         input_embeddings = self._input_embeddings(batch["inputs"], batch["puzzle_identifiers"])
 
-        # 1-step grad
-        z_H = self.H_level(carry.z_H, input_embeddings, **seq_info)
+        # Weight-tied loop over the H_layers stack (loops=1 == original single pass).
+        # The first n_nograd loops run without grad (TRM-style truncation); the
+        # rest carry grad. Input injection at loop 0 always, at loops >= 1 only if
+        # loop_input_injection. Across ACT steps the carry is still detached below
+        # (1-step grad per ACT step).
+        loops = self.config.loops
+        n_nograd = loops - self.config.loop_grad_cycles if self.config.loop_grad_cycles > 0 else 0
+        z_H = carry.z_H
+        if n_nograd > 0:
+            with torch.no_grad():
+                for _i in range(n_nograd):
+                    injection = input_embeddings if (_i == 0 or self.config.loop_input_injection) else None
+                    z_H = self.H_level(z_H, injection, **seq_info)
+        for _i in range(n_nograd, loops):
+            injection = input_embeddings if (_i == 0 or self.config.loop_input_injection) else None
+            z_H = self.H_level(z_H, injection, **seq_info)
 
         # LM Outputs
         new_carry = Model_ACTV2InnerCarry(
