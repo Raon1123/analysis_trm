@@ -165,6 +165,9 @@ def exact_rate(dec18: np.ndarray, labels10: np.ndarray) -> float:
 
 # ------------------------------------------------------------------ one cell
 
+MANIFEST_FPTE_TOL = 5e-6 + 1e-9  # manifest stores 5 decimals; closeout is full precision
+
+
 def process_cell(row: dict, a, closeout: dict) -> dict:
     name, step, arch, proto, k = row["run_name"], row["step"], row["arch"], row["protocol"], int(row["k"])
     unit = cellsmod.unit_name(name, step)
@@ -175,7 +178,11 @@ def process_cell(row: dict, a, closeout: dict) -> dict:
     out = {"rec": rec, "per_call": [], "pr": [], "cell": [], "near": [], "soft": []}
 
     co = closeout.get(name)
-    if co is None or co["run_id"] != row["run_id"] or abs(float(co["final_probe_test_exact"]) - float(row["final_probe_test_exact"])) > 1e-9:
+    # The frozen manifest (EXP017_cells.csv, prereg §4.1) records final_probe_test_exact
+    # rounded to 5 decimals, while the closeout CSV keeps full precision (e.g. 0.02734375
+    # vs 0.02734), so agreement is checked at the manifest's own precision (half-ulp of
+    # 5 decimals plus float slack). The full-precision closeout value is what gets used.
+    if co is None or co["run_id"] != row["run_id"] or abs(float(co["final_probe_test_exact"]) - float(row["final_probe_test_exact"])) > MANIFEST_FPTE_TOL:
         raise RuntimeError(f"{name}: closeout CSV row disagrees with the frozen manifest")
     rec["final_probe_test_exact"] = float(co["final_probe_test_exact"])
     rec["traj_class"] = co["traj_class"]
