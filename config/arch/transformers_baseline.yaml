@@ -5,9 +5,16 @@ loss:
 
 halt_exploration_prob: 0.1
 halt_max_steps: 16
+act_enabled: True  # train-time Q-halt early stopping when halt_max_steps>1 (pydantic default; declared so arch.act_enabled=... needs no '+')
+act_inference: False  # eval-time Q-halt early stopping when halt_max_steps>1 (pydantic default; declared for bare overrides)
 
 H_cycles: 1  # kept for compatibility
 H_layers: 8 
+
+# Weight-tied loop of the whole H_layers stack inside one forward (looped-TF control).
+loops: 1  # 1 = original single-pass stack (bit-identical); e.g. 21 with H_layers=2 -> C=42 blocks (TRM compute match)
+loop_input_injection: True  # re-add input embeddings at every loop (False: only at loop 0)
+loop_grad_cycles: 0  # 0 = full backprop through all loops; n>0 = no_grad for first loops-n loops (7 -> G=14 with H_layers=2)
 
 hidden_size: 512  
 num_heads: 12

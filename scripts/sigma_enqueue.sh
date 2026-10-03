@@ -423,6 +423,69 @@ TFB_LAYERS=(${TFB_LAYERS:-1 2 6 14})
 # differed.
 TFB_SEEDS=(${TFB_SEEDS:-1 2 3})
 
+# ---- Looped-transformer control (stage `ltf`, added 2026-09-23) ------------
+# Closes the "compute-matched looped stack is OUT OF SCOPE" gap noted at the
+# TFB_LAYERS comment above, WITHOUT the 42-distinct-layer / ~140M-param model:
+# transformers_baseline gained a weight-tied loop (models/recursive_reasoning/
+# transformers_baseline.py, config/arch/transformers_baseline.yaml):
+#   arch.loops=N               re-apply the whole H_layers stack N times per forward
+#   arch.loop_input_injection  re-add the input embedding at every loop (else loop 0 only)
+#   arch.loop_grad_cycles=n    0 = full backprop; n>0 = no_grad for the first N-n loops
+# With H_layers=2 and loops=21, C = 21*2 = 42 blocks per forward = the trm
+# baseline's C (tf_z_iter: H3 L6 lay2), at lay2's 6,795,266 params (0.5% under
+# trm's 6,828,034). Arms (each a one-factor contrast):
+#   fullgrad : C=42, G=42  -- compute-matched, full backprop through every loop
+#   g7       : C=42, G=14  -- ALSO gradient-depth-matched (TRM-style truncation:
+#              last 7 loops = 14 blocks carry grad, like trm's last H cycle)
+#   noinj    : C=42, G=42, input embedding added at loop 0 only -- isolates
+#              TRM's per-step input injection
+# What an ltf arm does NOT have relative to trm: the z_H/z_L two-state split
+# and the L-inside-H schedule. That difference is the one being measured.
+# Protocol parity with pp_base_tf_z_iter / pp_abl_tfb requires the enqueue-time
+# env DATA_ROOT=data/power_permutation/d1 (n=10, ord(σ)>k-clean D1 build) -- the
+# script default DATA_ROOT is data/sigma_k_10, same as every other stage here.
+#   tag | arch overrides (appended after arch.H_layers / arch.halt_max_steps=1)
+LTF_ARMS=(
+    "fullgrad|arch.loops=21 arch.loop_grad_cycles=0 arch.loop_input_injection=True"
+    "g7|arch.loops=21 arch.loop_grad_cycles=7 arch.loop_input_injection=True"
+    "noinj|arch.loops=21 arch.loop_grad_cycles=0 arch.loop_input_injection=False"
+)
+LTF_LAYERS=(${LTF_LAYERS:-2})
+LTF_SEEDS=(${LTF_SEEDS:-1 2 3})   # private seed array (EXP-013 lesson, see INV_SEEDS)
+
+# ---- ACT axis (stage `act`) — EXP-016 / H-200 --------------------------------
+# Grid is FROZEN by lab/21_experiments/11_lab-experiments/
+# EXP-016_act-deep-supervision-axis.md §4.2 / §4.4 (ACT_ARMS below is the §4.4
+# declaration verbatim). Emitted bodies must stay byte-equal to §4.2.
+# Every live cohort pins arch.halt_max_steps=1, so ACT / deep supervision has
+# been OFF everywhere that matters. This stage turns it on (halt=16) for:
+#   noz_iter           : trm_singlez, the H-collapse cohort (A1)
+#   ltf_fullgrad       : looped transformers_baseline, adaptive halting in
+#                        training only (act_enabled=True act_inference=False) (A2)
+#   ltf_fullgrad_fixed : same, act_enabled=False -> always 16 steps (A3,
+#                        fixed-16 control for A2)
+# With halt_max_steps>1 the inner model is re-applied up to halt_max_steps
+# times, carry DETACHED between ACT steps, loss on every step (deep supervision).
+# Halting: trm_singlez has NO act_enabled / act_inference fields
+# (trm_singlez.py:272): adaptive only in training (q_halt > 0), always the full
+# halt_max_steps at eval. transformers_baseline with act_inference=False also
+# runs the full halt_max_steps at eval; in training (act_enabled=True) it halts
+# on q_halt > q_continue, and q_continue gets NO loss term (compute_target_q has
+# no caller), so the rule is effectively q_halt > a near-constant from bias -5.
+# Same DATA_ROOT note as LTF_ARMS (env DATA_ROOT=data/power_permutation/d1).
+# A0 (the halt=1 comparator top-up) is NOT emitted here: stage fig1 with
+# COHORT_FILTER=tf_noz_iter emits it (EXP-016 §4.4 enqueue procedure).
+# NOTE cell_id reuses arm=act, which ablation_act also emits -- filter on the
+# extra `cohort=` key to separate them.
+# one arm per entry:  tag | arch | halt | k list (emission order) | arch overrides
+# (halt is appended as arch.halt_max_steps=<halt> AFTER the overrides; Hydra last-key-wins)
+ACT_ARMS=(
+  "noz_iter|trm_singlez|16|5 6 7 3 10|arch.mlp_t=False arch.H_cycles=3 arch.L_cycles=6 arch.L_layers=2 arch.halt_exploration_prob=0.1"
+  "ltf_fullgrad|transformers_baseline|16|5 6 7 3 10|arch.H_layers=2 arch.loops=21 arch.loop_grad_cycles=0 arch.loop_input_injection=True arch.halt_exploration_prob=0.1 arch.act_enabled=True arch.act_inference=False"
+  "ltf_fullgrad_fixed|transformers_baseline|16|5 6 7|arch.H_layers=2 arch.loops=21 arch.loop_grad_cycles=0 arch.loop_input_injection=True arch.halt_exploration_prob=0.1 arch.act_enabled=False arch.act_inference=False"
+)
+ACT_SEEDS=(${ACT_SEEDS:-1 2 3})   # private seed array
+
 # ---- SP-04-L03 judgment cells (G-20260813-inverse-learnability) ----------
 # tf_noz_iter (the H-collapse cohort) at k in {9,12,13,16}: does it learn AT
 # ALL under D0 data given a longer budget than the live campaign default?
@@ -686,6 +749,22 @@ EOF
 #                                   enqueue time). PRIVATE SEEDEXT_SEEDS array.
 #                                   run_group "seedext-d0". Also must be
 #                                   selected explicitly.
+#   STAGES=ltf            45 jobs   looped-transformer control (LTF_ARMS
+#                                   fullgrad/g7/noinj x K_DIAG x LTF_LAYERS=2 x
+#                                   LTF_SEEDS 1,2,3): transformers_baseline
+#                                   with a weight-tied loop, C=42 matched to
+#                                   the trm baseline, halt=1. Arm-major FIFO
+#                                   (whole fullgrad arm first). run_group
+#                                   "ltf". Must be selected explicitly.
+#   STAGES=act            39 jobs   ACT axis, EXP-016 §4.2 (ACT_ARMS, halt=16,
+#                                   ACT_SEEDS 1,2,3): noz_iter k 5,6,7,3,10 (15)
+#                                   -> ltf_fullgrad k 5,6,7,3,10 (15) ->
+#                                   ltf_fullgrad_fixed k 5,6,7 (9). Arm-major
+#                                   FIFO. Halting rules differ between arches --
+#                                   see the ACT_ARMS comment. run_group "act".
+#                                   Must be selected explicitly.
+#   (ltf/act need DATA_ROOT=data/power_permutation/d1 for parity with the
+#    pp_base / pp_abl_tfb cohorts they are compared against.)
 #
 # Legacy tokens still work: "fig1" == "cohorts" over the full K_LIST, and
 # "ablation" expands to all three ablation stages, so any existing caller
@@ -855,6 +934,50 @@ main() {
                     emit_job "${prefix}abl_tfb_lay${lay}_k${k}_s${s}" \
                         "transformers_baseline" "$k" "$s" \
                         "arch.H_layers=${lay} arch.halt_max_steps=1"
+                done
+            done
+        done
+    fi
+    # -- 2c') looped-transformer control (see LTF_ARMS above) --
+    # Arm-major: the whole first arm is emitted across every k before the
+    # second, so FIFO finishes one complete arm first. Arm overrides are
+    # appended AFTER arch.halt_max_steps=1 (Hydra last-key-wins; they never
+    # touch halt anyway). arch.H_cycles is not passed: still a no-op for tfb.
+    if [[ " $STAGES " == *" ltf "* ]]; then
+        RUN_GROUP="${RUN_GROUP_LTF:-ltf}"
+        for spec in "${LTF_ARMS[@]}"; do
+            IFS='|' read -r tag arch_args <<< "$spec"
+            for k in "${K_DIAG[@]}"; do
+                for lay in "${LTF_LAYERS[@]}"; do
+                    for s in "${LTF_SEEDS[@]}"; do
+                        CELL_ID="arm=ltf,ltf=${tag},lay=${lay},n=10,k=${k},s=${s}"
+                        emit_job "${prefix}ltf_${tag}_lay${lay}_k${k}_s${s}" \
+                            "transformers_baseline" "$k" "$s" \
+                            "arch.H_layers=${lay} arch.halt_max_steps=1 ${arch_args}"
+                    done
+                done
+            done
+        done
+    fi
+    # -- 2c'') ACT axis (see ACT_ARMS above; EXP-016 §4.4) --
+    # RUN_GROUP override is RUN_GROUP_ACTAX, NOT RUN_GROUP_ACT: the latter
+    # already belongs to stage ablation_act, and sharing it would silently
+    # regroup that stage too.
+    # emission: arm-major -> k in the arm's listed order -> ACT_SEEDS.
+    # act_enabled/act_inference live in the ACT_ARMS overrides (only
+    # transformers_baseline declares them); halt_max_steps goes LAST.
+    if [[ " $STAGES " == *" act "* ]]; then
+        RUN_GROUP="${RUN_GROUP_ACTAX:-act}"
+        local halt act_k overrides
+        for spec in "${ACT_ARMS[@]}"; do
+            IFS='|' read -r tag arch halt act_k overrides <<< "$spec"
+            for k in $act_k; do
+                for s in "${ACT_SEEDS[@]}"; do
+                    CELL_ID="arm=act,cohort=${tag},halt=${halt},n=10,k=${k},s=${s}"
+                    emit_job "${prefix}act_${tag}_h${halt}_k${k}_s${s}" \
+                        "$arch" "$k" "$s" \
+                        "${overrides}" \
+                        "arch.halt_max_steps=${halt}"
                 done
             done
         done
