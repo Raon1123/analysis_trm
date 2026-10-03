@@ -587,3 +587,18 @@ def test_process_cell_end_to_end_on_tiny_random_model(tmp_path, monkeypatch):
     for r in csv.DictReader(io.StringIO(",".join(run_zdyn.CELL_FIELDS) + "\n" + txt)):
         M = judge.recompute_M(r)
         assert M == r["M"] and judge.recompute_Z(r, M) == r["Z"]
+
+
+def test_manifest_closeout_agreement_is_checked_at_the_manifest_precision():
+    """The frozen manifest stores final_probe_test_exact to 5 decimals; the closeout CSV is
+    full precision. 16 of the 41 real cells (binary fractions such as 7/256 = 0.02734375 vs
+    0.02734) crashed the 2026-10-03 run under a 1e-9 tolerance. A manifest value is accepted
+    when it is the 5-decimal rounding of the closeout value, and nothing looser."""
+    from analysis.z_dynamics import run_zdyn
+
+    row = {"run_name": "x", "run_id": "yemeqgka", "final_probe_test_exact": "0.02734"}
+    assert abs(0.02734375 - float(row["final_probe_test_exact"])) <= run_zdyn.MANIFEST_FPTE_TOL
+    assert abs(0.015625 - 0.01563) <= run_zdyn.MANIFEST_FPTE_TOL        # exact half-ulp case
+    assert abs(0.02734375 - 0.02735) > run_zdyn.MANIFEST_FPTE_TOL        # wrong rounding rejected
+    assert abs(0.0234375 - 0.0234) > run_zdyn.MANIFEST_FPTE_TOL          # 4-decimal truncation rejected
+    assert run_zdyn.MANIFEST_FPTE_TOL < 1e-5
