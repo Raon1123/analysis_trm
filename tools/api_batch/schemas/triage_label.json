@@ -1,0 +1,1 @@
+{"type": "object", "properties": {"label": {"type": "string"}, "duplicate_of": {"type": "string"}}, "required": ["label", "duplicate_of"], "additionalProperties": false}

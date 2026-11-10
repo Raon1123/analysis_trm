@@ -1,0 +1,3 @@
+SYNTHETIC PROBE D for the fallbacks parameter check (no lab content).
+The harbor lamp keeps a ledger of copper kettles, one line per kettle, and no kettle appears twice. (note 1) A gardener sorts seed packets by color first and by the month printed on the back second. (note 2) Three clocks in the hallway disagree by a minute each, which the caretaker considers a feature. (note 3)
+Task: reply with the word ok.

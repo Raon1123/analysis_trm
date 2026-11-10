@@ -59,6 +59,14 @@ class DataConfig(BaseModel):
     # Checkpoints/figures trained BEFORE 2026-07-20 13:18 used the buggy ord<=2 data.
     only_k: int = 0
     order_filter: bool = True
+    # 2026-11-05 (state-bench `disjoint_from` analog; lab/28_literature/11_lab-literature/
+    # 2026-11-05_state-bench-applicability.md §3.2): the default path re-seeds the SAME rng
+    # per k, so every k-dir is a filtration of one seed stream and train(k_a) ∩ test(k_b)
+    # is large for k_a > k_b. cross_k_disjoint=True makes all splits of all k in this run
+    # mutually disjoint (shared seen-set, per-k seed [seed, k]). Opt-in only: the default
+    # stays byte-identical so existing data/checkpoint provenance is unchanged.
+    cross_k_disjoint: bool = False
+    write_manifest: bool = True
 
 
 # ---------------------------------------------------------------------------
@@ -210,21 +218,30 @@ def build(config: DataConfig):
     print(f"sigma^k dataset (Format D)  n={config.n}  "
           f"train={config.train_size}  test={config.test_size}")
 
+    if config.cross_k_disjoint and config.only_k > 0:
+        # Disjointness against other k needs their sigmas in the same run.
+        raise ValueError("cross_k_disjoint=True requires a full multi-k build (only_k=0)")
+
     os.makedirs(config.output_dir, exist_ok=True)
     with open(os.path.join(config.output_dir, "identifiers.json"), "w") as f:
         json.dump(["<blank>"], f)
 
     # EXP-007(20260703): only_k>0 restricts the build to that single k
     k_list = [config.only_k] if config.only_k > 0 else [3, 4, 5, 6, 7, 8, 10]
+    used_across_k: set[bytes] = set()
     for k in k_list:
         config_k = config.model_copy(update={"k": k})
         print(f"\nBuilding k={k} dataset...")
-        rng = np.random.default_rng(config.seed)
+        if config.cross_k_disjoint:
+            rng = np.random.default_rng([config.seed, k])
+            seen: set[bytes] = set(used_across_k)
+        else:
+            rng = np.random.default_rng(config.seed)  # legacy: byte-identical to pre-11-05 builds
+            seen = set()
 
         # Sample train + test together from a single unique pool.
         # Slicing is the only mechanism that assigns permutations to splits,
         # so train ∩ test = ∅ is guaranteed by construction.
-        seen: set[bytes] = set()
         total = config.train_size + config.test_size
         
         # NOTE(EXP-007): fixed 2026-07-20 — passes the per-iteration config_k.k so the
@@ -250,7 +267,46 @@ def build(config: DataConfig):
         build_split("train", config_k, train_sigmas)
         build_split("test",  config_k, test_sigmas)
 
+        if config.write_manifest:
+            write_manifest(config_k, train_sigmas, test_sigmas,
+                           excluded_ks=[kk for kk in k_list if kk < k] if config.cross_k_disjoint else [])
+        if config.cross_k_disjoint:
+            used_across_k.update(s.tobytes() for s in all_sigmas)
+
     print("Done.")
+
+
+def write_manifest(config: DataConfig, train_sigmas: list[np.ndarray],
+                   test_sigmas: list[np.ndarray], excluded_ks: list[int]) -> None:
+    """Write <output_dir>/<k>/manifest.json (state-bench manifest analog).
+
+    Records what the npy files cannot: generator hash, full config, order range,
+    and which EARLIER k's sigmas this k was excluded against (later k exclude this
+    one in turn, so with cross_k_disjoint every k is disjoint from every other). Audit with
+    tools/sigmak_data_audit.py.
+    """
+    import hashlib
+    with open(__file__, "rb") as f:
+        gen_sha = hashlib.sha256(f.read()).hexdigest()
+    orders = {name: [perm_order(s) for s in sig]
+              for name, sig in (("train", train_sigmas), ("test", test_sigmas))}
+    manifest = {
+        "schema_version": 1,
+        "generator": "dataset/build_sigma_k_dataset.py",
+        "generator_sha256": gen_sha,
+        "numpy_version": np.__version__,
+        "config": config.model_dump(),
+        "rng_seed": [config.seed, config.k] if config.cross_k_disjoint else config.seed,
+        "sizes": {"train": len(train_sigmas), "test": len(test_sigmas)},
+        "order_range": {name: [min(o), max(o)] for name, o in orders.items()},
+        "train_test_overlap": len({s.tobytes() for s in train_sigmas}
+                                  & {s.tobytes() for s in test_sigmas}),
+        "cross_k_disjoint_from": excluded_ks,
+    }
+    path = os.path.join(config.output_dir, str(config.k), "manifest.json")
+    with open(path, "w") as f:
+        json.dump(manifest, f, indent=2)
+        f.write("\n")
 
 
 if __name__ == "__main__":

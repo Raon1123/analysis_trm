@@ -1,0 +1,27 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {"type": "command", "command": "f=\"$CLAUDE_PROJECT_DIR/tools/harness_hooks/bash_guard.py\"; [ -f \"$f\" ] && [ -r \"$f\" ] || exit 0; python3 \"$f\"", "timeout": 5}
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {"type": "command", "command": "f=\"$CLAUDE_PROJECT_DIR/tools/harness_hooks/session_brief.py\"; [ -f \"$f\" ] && [ -r \"$f\" ] || exit 0; python3 \"$f\"", "timeout": 10}
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {"type": "command", "command": "f=\"$CLAUDE_PROJECT_DIR/tools/harness_hooks/sh_syntax_check.py\"; [ -f \"$f\" ] && [ -r \"$f\" ] || exit 0; python3 \"$f\"", "timeout": 8}
+        ]
+      }
+    ]
+  }
+}
