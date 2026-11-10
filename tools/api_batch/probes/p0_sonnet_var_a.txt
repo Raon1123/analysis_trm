@@ -1,0 +1,1 @@
+Variable part A: list the first three notes as JSON with a field named answer.
