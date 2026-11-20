@@ -1,0 +1,26 @@
+name: recursive_reasoning.transformers_baseline_skip@Model_ACTV2
+loss:
+  name: losses@ACTLossHead
+  loss_type: stablemax_cross_entropy
+
+halt_exploration_prob: 0.1
+halt_max_steps: 16
+act_enabled: True  # train-time Q-halt early stopping when halt_max_steps>1 (pydantic default; declared so arch.act_enabled=... needs no '+')
+act_inference: False  # eval-time Q-halt early stopping when halt_max_steps>1 (pydantic default; declared for bare overrides)
+
+H_cycles: 1  # kept for compatibility
+H_layers: 8 
+
+# Weight-tied loop of the whole H_layers stack inside one forward (looped-TF control).
+loops: 1  # 1 = original single-pass stack (bit-identical); e.g. 21 with H_layers=2 -> C=42 blocks (TRM compute match)
+loop_input_injection: True  # re-add input embeddings at every loop (False: only at loop 0)
+loop_input_injection_skip_period: 7  # R3/g7s: skip injection at loops i%7==6 (6,13,20 of 21); 0 = off; allowed 0 or >=2, must divide loops, needs loop_input_injection=True
+loop_grad_cycles: 0  # 0 = full backprop through all loops; n>0 = no_grad for first loops-n loops (7 -> G=14 with H_layers=2)
+
+hidden_size: 512  
+num_heads: 12
+expansion: 4
+
+puzzle_emb_ndim: ${.hidden_size}
+
+pos_encodings: rope

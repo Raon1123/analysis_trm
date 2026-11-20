@@ -453,6 +453,23 @@ LTF_ARMS=(
 LTF_LAYERS=(${LTF_LAYERS:-2})
 LTF_SEEDS=(${LTF_SEEDS:-1 2 3})   # private seed array (EXP-013 lesson, see INV_SEEDS)
 
+# ---- heads8 control of the ltf g7 arm (stage `ltfh8`, prereg DRAFT 2026-11-14) ----
+# lab/23_reports/11_lab-reports/2026-11-14_heads8-g7-control-prereg-DRAFT.md
+# The EXP-015 g7 arm with ONE added key: arch.num_heads 12 -> 8 (TRM's attention
+# geometry: head_dim 64, width 512, 6,828,034 params = trm tf_z_iter).
+# A SEPARATE stage, array and name family on purpose:
+#   - LTF_ARMS / STAGES=ltf must keep emitting exactly the 45 EXP-015 names
+#     (exp015_gate_bodies.py, pg1_body_gate.py);
+#   - run names are pp_ltfh8_*, NOT pp_ltf_*, so the pp_ltf_* name globs and the
+#     run-family rule ^pp_ltf_*_lay2_k\d+_s\d+$ (EXP-015 / EXP-023) do not match.
+# Private k and seed arrays. Needs DATA_ROOT=data/power_permutation/d1 like `ltf`.
+#   tag | arch overrides (appended after arch.H_layers=2 arch.halt_max_steps=1)
+LTFH8_ARMS=(
+    "g7|arch.loops=21 arch.loop_grad_cycles=7 arch.loop_input_injection=True arch.num_heads=8"
+)
+LTFH8_K=(${LTFH8_K:-3 5 6 7})
+LTFH8_SEEDS=(${LTFH8_SEEDS:-1 2 3})
+
 # ---- ACT axis (stage `act`) — EXP-016 / H-200 --------------------------------
 # Grid is FROZEN by lab/21_experiments/11_lab-experiments/
 # EXP-016_act-deep-supervision-axis.md §4.2 / §4.4 (ACT_ARMS below is the §4.4
@@ -547,6 +564,184 @@ inv_cell_allowed() {
 # epochs=100000 and RUN_GROUP="seedext-d0".
 SEEDEXT_K_LIST=(${SEEDEXT_K_LIST:-3 4 5 6 7 8 10})
 SEEDEXT_SEEDS=(${SEEDEXT_SEEDS:-2 3})
+
+# ---- EXP-018 stages (`e018_*`) — separation-signal gates, 129 runs ----------
+# Declared from lab/21_experiments/11_lab-experiments/EXP-018_separation-signal-gates.md
+# §4.3 (grid) / §4.4 (stage order) + 19_DECISIONS_2026-10-07.md (b,j,l).
+# Added 2026-10-20 (prep lane B). NOT yet enqueued; draft prereg, not frozen.
+# Selected ONLY with run prefix `e018` (hard error otherwise) and explicit
+# STAGES tokens; there is deliberately NO aggregate token:
+#   e018_g1   57  G1 NULL: NT4a 30 + NT4b 12 + NT4c 6 + noiter 9 (config only)
+#   e018_g3    9  G3 OPT: fullgrad 3 + cyclelossdetach 3 + learninit_fullgrad 3
+#                 (flags merge needed; learninit = learnable_init + full_grad_cycles,
+#                 requester decision B1, intake 9d5fd91cab / witness W4)
+#   e018_g4   21  G4: cap 6 + per 3 + bcopy 6 + carry 3 + stb_zhreset 3
+#   e018_g2   39  G2: sym2/singlefull/singletok x k5,6,7,8 x 3 + noz k8 x 3
+#   e018_lb    3  BLOCKED (LB2 zH_freeze x3: B2 stop-gradient is a no-op at
+#                 halt_max_steps=1, arm held per requester, witness W4). Real
+#                 enqueue refused unless E018_ALLOW_BLOCKED=1. Never part of
+#                 any other token.
+# 129 = 57 + 9 + 21 + 39 + 3. Regression runs (2) and the G1-hold seed 13/14
+# extension (12) are NOT emitted here.
+# Common: 1.5x budget = epochs=150000 (int(150000*5000/2048)=366,210 steps; 75
+# evals at eval_interval=2000), checkpoint_every_eval=True, project
+# EXP018_sigma_k, data data/sigma_k_10 (ds2/ds3 for NT4b k=6). Seeds start at 8
+# (private arrays; seeds 1-7 refused unless E018_ALLOW_LOW_SEEDS=1).
+# Flag keys (inject_H, inject_last, step_token, full_grad_cycles, per_cycle_loss,
+# learnable_init, zH_*, zL_reset, boundary_copy, x_copy) exist only in worktree
+# trm-exp018-flags_claude until merge; real enqueue refuses an arm whose key is
+# absent from config/arch/<arch>.yaml (struct mode would kill the job anyway).
+# The per-stage `df` gate (decision l) is checked here on real runs only; the
+# stage-wise order (decision j) remains an operator obligation.
+# spec: block|tag|arch|k list|seedset(A=5 seeds,B=3 seeds)|data seeds|arch overrides
+E018_SEEDS_A=(${E018_SEEDS_A:-8 9 10 11 12})
+E018_SEEDS_B=(${E018_SEEDS_B:-8 9 10})
+E018_EPOCHS="${E018_EPOCHS:-150000}"
+E018_DATA_ROOT="${E018_DATA_ROOT:-data/sigma_k_10}"
+E018_BASE="arch.mlp_t=False arch.L_layers=2 arch.halt_max_steps=1"
+E018_CYC="arch.H_cycles=3 arch.L_cycles=6"
+E018_G1_ARMS=(
+  "nt4a|asym2|trm|5 6 7|A|1|${E018_CYC}"
+  "nt4a|noz|trm_singlez|5 6 7|A|1|${E018_CYC}"
+  "nt4b|asym2|trm|6|B|2 3|${E018_CYC}"
+  "nt4b|noz|trm_singlez|6|B|2 3|${E018_CYC}"
+  "nt4c|asym2|trm|8 10|B|1|${E018_CYC}"
+  "noiter|noz|trm_singlez|8 10|B|1|arch.H_cycles=1 arch.L_cycles=1"
+  "noiter|asym2|trm|10|B|1|arch.H_cycles=1 arch.L_cycles=1"
+)
+E018_G3_ARMS=(
+  "g3|noz_fullgrad|trm_singlez|6|B|1|${E018_CYC} arch.full_grad_cycles=True"
+  "g3|noz_cyclelossdetach|trm_singlez|6|B|1|${E018_CYC} arch.per_cycle_loss=True"
+  "g3|noz_learninit_fullgrad|trm_singlez|6|B|1|${E018_CYC} arch.learnable_init=True arch.full_grad_cycles=True"
+)
+E018_G4_ARMS=(
+  "g4|cap_noz1024|trm_singlez|6|B|1|${E018_CYC} arch.hidden_size=1024"
+  "g4|cap_asym256|trm|6|B|1|${E018_CYC} arch.hidden_size=256"
+  "g4|per_zhevery|trm|6|B|1|${E018_CYC} arch.zH_every_call=True"
+  "g4|bcopy_boundary|trm_singlez|6|B|1|${E018_CYC} arch.boundary_copy=True"
+  "g4|bcopy_xcopy|trm_singlez|6|B|1|${E018_CYC} arch.x_copy=True"
+  "g4|carry_zlreset|trm|6|B|1|${E018_CYC} arch.zL_reset=True"
+  "g4|stb_zhreset|trm|6|B|1|${E018_CYC} arch.zH_reset=True"
+)
+E018_G2_ARMS=(
+  "g2|sym2|trm|5 6 7 8|B|1|${E018_CYC} arch.inject_H=True"
+  "g2|singlefull|trm_singlez|5 6 7 8|B|1|${E018_CYC} arch.inject_last=True"
+  "g2|singletok|trm_singlez|5 6 7 8|B|1|${E018_CYC} arch.inject_last=True arch.step_token=True"
+  "g2|noz|trm_singlez|8|B|1|${E018_CYC}"
+)
+E018_LB_ARMS=(
+  "g4|stb_zhfreeze|trm|6|B|1|${E018_CYC} arch.zH_freeze=True"
+)
+
+# e018_preflight -- no-op unless the e018 prefix or an e018_* token is in play.
+e018_preflight() {
+    local has_tok=0
+    [[ " $STAGES " == *" e018_"* ]] && has_tok=1
+    if [[ "$RUN_PREFIX" == "e018" ]] && (( ! has_tok )); then
+        echo "ERROR: prefix e018 needs explicit STAGES with e018_* tokens" >&2
+        echo "       (e018_g1 e018_g3 e018_g4 e018_g2 e018_lb); default STAGES would emit e018_base_*." >&2
+        exit 2
+    fi
+    if (( has_tok )) && [[ "$RUN_PREFIX" != "e018" ]]; then
+        echo "ERROR: e018_* stages require run prefix 'e018' (got '${RUN_PREFIX}')" >&2
+        exit 2
+    fi
+    return 0
+}
+
+# ---- EXP-020 stages (`e020_*`) -- EXP-016 supplement, 27 runs (DRAFT prereg) ----
+# Declared from lab/23_reports/11_lab-reports/2026-10-22_exp020-act-budget-extension-prereg.md §4.
+# NOT enqueued; prereg not frozen. Selected ONLY with run prefix `e020` (hard error otherwise)
+# and explicit STAGES tokens; there is deliberately NO aggregate token:
+#   e020_s1  18  C-EXT-B: per (k, seed) the pair Cx (trm_singlez halt 1) then A1x (trm_singlez
+#                h_max 16), epochs 76000 (38 evals; last logged step 38*4882 = 185,516)
+#   e020_s2   9  C-EXT-H: A2n looped TF h_max 16 adaptive, k 2 3 4 x seeds 4 5 6, epochs 50000
+# DATA_ROOT and WANDB_PROJECT are pinned INSIDE the stages (EXP-016 parity: D1 and project
+# power_permutation). The script default data/sigma_k_10 is a different dataset (other files).
+# Grids are fixed by the prereg: no env override of k, seeds or epochs.
+E020_DATA_ROOT="data/power_permutation/d1"
+E020_PROJECT="power_permutation"
+E020_S1_EPOCHS=76000
+E020_S1_K=(5 6 7)
+E020_S1_SEEDS=(1 2 3)
+E020_S2_K=(2 3 4)
+E020_S2_SEEDS=(4 5 6)
+E020_NOZ="arch.mlp_t=False arch.H_cycles=3 arch.L_cycles=6"
+E020_LTF="arch.H_layers=2 arch.loops=21 arch.loop_grad_cycles=0 arch.loop_input_injection=True arch.halt_exploration_prob=0.1 arch.act_enabled=True arch.act_inference=False"
+
+# e020_preflight -- no-op unless the e020 prefix or an e020_* token is in play.
+e020_preflight() {
+    local has_tok=0
+    [[ " $STAGES " == *" e020_"* ]] && has_tok=1
+    if [[ "$RUN_PREFIX" == "e020" ]] && (( ! has_tok )); then
+        echo "ERROR: prefix e020 needs explicit STAGES with e020_* tokens (e020_s1 e020_s2)" >&2
+        exit 2
+    fi
+    if (( has_tok )) && [[ "$RUN_PREFIX" != "e020" ]]; then
+        echo "ERROR: e020_* stages require run prefix 'e020' (got '${RUN_PREFIX}')" >&2
+        exit 2
+    fi
+    return 0
+}
+
+# e018_gate <stage> <est_gb> -- df gate (decision l). Real run: hard fail.
+# est_gb = 1.96 GB/run (prereg 4.5) with hidden-1024 arm taken as ~8 GB/run
+# (prereg: "약 4배 추정, 미실측"). Margin E018_DF_MARGIN_GB (default 50).
+e018_gate() {
+    local stage="$1" need="$2" avail margin="${E018_DF_MARGIN_GB:-50}"
+    avail="$(df --output=avail -BG / | tail -n 1 | tr -dc '0-9')"
+    [[ -n "$avail" ]] || { echo "ERROR: e018 df gate could not read df" >&2; exit 1; }
+    if (( DRY_RUN )); then
+        echo "e018 df gate (info) stage=${stage} avail=${avail}G need=${need}G margin=${margin}G" >&2
+    elif (( avail < need + margin )); then
+        echo "ERROR: e018 df gate FAILED stage=${stage} avail=${avail}G need=${need}G margin=${margin}G" >&2
+        exit 1
+    fi
+    return 0
+}
+
+# e018_emit_arms <ARMS array name>
+e018_emit_arms() {
+    local -n _e018_arms="$1"
+    local spec blk tag arch ks sset dss ov k d s key
+    local -a seeds
+    local _save_root="$DATA_ROOT" _save_proj="$WANDB_PROJECT" _save_grp="$RUN_GROUP"
+    WANDB_PROJECT="${E018_WANDB_PROJECT:-EXP018_sigma_k}"
+    for spec in "${_e018_arms[@]}"; do
+        IFS='|' read -r blk tag arch ks sset dss ov <<< "$spec"
+        if [[ "$sset" == "A" ]]; then seeds=("${E018_SEEDS_A[@]}"); else seeds=("${E018_SEEDS_B[@]}"); fi
+        for s in "${seeds[@]}"; do
+            if (( s < 8 )) && [[ "${E018_ALLOW_LOW_SEEDS:-0}" != "1" ]]; then
+                echo "ERROR: e018 seed ${s} < 8 (H108N seeds 1-7 are not reusable)" >&2; exit 2
+            fi
+        done
+        for key in $(grep -oE 'arch\.(inject_H|inject_last|step_token|full_grad_cycles|per_cycle_loss|learnable_init|zH_every_call|zH_freeze|zL_reset|zH_reset|boundary_copy|x_copy)=' <<< "$ov" || true); do
+            key="${key#arch.}"; key="${key%=}"
+            if ! grep -q "^${key}:" "config/arch/${arch}.yaml" 2>/dev/null; then
+                if (( DRY_RUN )); then
+                    echo "e018 WARN (info): ${key} absent from config/arch/${arch}.yaml (flags not merged)" >&2
+                else
+                    echo "ERROR: e018 flag ${key} absent from config/arch/${arch}.yaml; merge flags first" >&2; exit 1
+                fi
+            fi
+        done
+        RUN_GROUP="e018_${blk}"
+        for k in $ks; do
+            for d in $dss; do
+                if [[ "$d" == "1" ]]; then DATA_ROOT="$E018_DATA_ROOT"; else DATA_ROOT="${E018_DATA_ROOT}_ds${d}"; fi
+                for s in "${seeds[@]}"; do
+                    CELL_ID="arm=e018,block=${blk},cohort=${tag},n=10,k=${k},s=${s},ds=${d}"
+                    emit_job "${prefix}${blk}_${tag}_k${k}_s${s}$( [[ "$d" == "1" ]] || echo "_ds${d}" )" \
+                        "$arch" "$k" "$s" \
+                        "${E018_BASE} ${ov}" \
+                        "epochs=${E018_EPOCHS} checkpoint_every_eval=True"
+                done
+            done
+        done
+    done
+    DATA_ROOT="$_save_root"; WANDB_PROJECT="$_save_proj"; RUN_GROUP="$_save_grp"
+    return 0
+}
 
 # CELL_ID is set by each stage before calling emit_job (see the stages below)
 # and is emitted into the run config verbatim. It is the machine-readable grid
@@ -774,6 +969,250 @@ STAGES="${STAGES:-baseline}"
 
 main() {
     local tier k spec tag arch arch_args mlp_t Hc Lc s lay cyc r
+    e018_preflight
+    e020_preflight
+    # -- e026 (2026-11-10, user instruction): halt16 two-state TRM vs looped TF --
+    # Prereg: lab/23_reports/11_lab-reports/2026-11-10_exp026-halt16-two-state-prereg.md
+    # T16 seeds 2-3 copy pp_abl_halt16's flags (seed 1 = existing pp_abl_halt16_k*_s1);
+    # G16 copies e016_act_ltf_fullgrad_h16 with loop_grad_cycles 0 -> 7 (EXP-015 g7).
+    # D1 data, 50000 epochs, K_DIAG. Emitted only with STAGES=e026 and an empty prefix.
+    if [[ " $STAGES " == *" e026 "* ]]; then
+        if [[ -n "$RUN_PREFIX" ]]; then
+            echo "ERROR: e026 uses fixed run names; run with no prefix" >&2
+            exit 1
+        fi
+        local e026_common="epochs=50000 eval_interval=2000 lr=1e-4 puzzle_emb_lr=1e-4 weight_decay=1.0 puzzle_emb_weight_decay=1.0 +log_z_dynamics=True +z_snapshot=True checkpoint_every_eval=False +eval_save_outputs=[inputs,labels,preds,puzzle_identifiers]"
+        local ek es
+        for ek in 3 5 6 7 10; do
+            for es in 2 3; do
+                enqueue "e026_trm_h16_k${ek}_s${es}" <<EOF
+uv run pretrain.py arch=trm ${e026_common} \\
+    arch.mlp_t=False arch.H_cycles=3 arch.L_cycles=6 arch.L_layers=2 arch.halt_max_steps=16 +z_seq_metrics=True \\
+    evaluators="[]" \\
+    data_paths="[data/power_permutation/d1/${ek}]" \\
+    seed=${es} \\
+    +k=${ek} \\
+    +project_name="power_permutation" \\
+    +run_group="e026" \\
+    +run_name="e026_trm_h16_k${ek}_s${es}" \\
+    +cell_id='"arm=e026,cohort=trm,halt=16,n=10,k=${ek},s=${es}"' \\
+    ema=True
+EOF
+            done
+            for es in 1 2 3; do
+                enqueue "e026_ltf_g7_h16_k${ek}_s${es}" <<EOF
+uv run pretrain.py arch=transformers_baseline ${e026_common} \\
+    arch.H_layers=2 arch.loops=21 arch.loop_grad_cycles=7 arch.loop_input_injection=True arch.halt_exploration_prob=0.1 arch.act_enabled=True arch.act_inference=False arch.halt_max_steps=16 \\
+    evaluators="[]" \\
+    data_paths="[data/power_permutation/d1/${ek}]" \\
+    seed=${es} \\
+    +k=${ek} \\
+    +project_name="power_permutation" \\
+    +run_group="e026" \\
+    +run_name="e026_ltf_g7_h16_k${ek}_s${es}" \\
+    +cell_id='"arm=e026,cohort=ltf_g7,halt=16,n=10,k=${ek},s=${es}"' \\
+    ema=True
+EOF
+            done
+        done
+        return 0
+    fi
+    # -- cc27 (2026-11-18): ICML 2027 confirmation cohort, D1 k in K_F={5,6,7} (+k=3 for R3) --
+    # Prereg: lab/23_reports/11_lab-reports/2026-11-18_icml27-confirm-cohort-prereg-DRAFT.md (§2, §3.1).
+    # Dedicated stages (no existing array touched); explicit selection only, empty prefix:
+    #   cc27_r2  TRM + g7 halt 1,  k 5 6 7, seeds 41-46   (36 jobs)
+    #   cc27_r4  trm_singlez halt 1, k 5 6 7, seeds 61-63 ( 9)
+    #   cc27_r3  g7s (arch=transformers_baseline_skip, skip period 7) halt 1, k 5 6 7 3, seeds 51-53 (12)
+    #   cc27_r1  TRM + g7 halt 16, k 5 6 7, seeds 21-35   (90)
+    # Bodies = the landed reference bodies of the same arm (pp_base_tf_z_iter, pp_ltf_g7_lay2,
+    # e016_fig1_tf_noz_iter, e026_trm_h16, e026_ltf_g7_h16) with only seed/k and identity fields
+    # (run_name, run_group, cell_id) changed; R3 = g7 body with arch=transformers_baseline_skip plus the
+    # explicit arch.loop_input_injection_skip_period=7. Order: k -> seed -> arm. Data root fixed to D1.
+    # Enqueue each stage, then rename per prereg G7 (R2 0722c_, R4 0722d_, R3 0722e_, R1 0722f_).
+    if [[ " $STAGES " == *" cc27_r1 "* || " $STAGES " == *" cc27_r2 "* || " $STAGES " == *" cc27_r3 "* || " $STAGES " == *" cc27_r4 "* ]]; then
+        if [[ -n "$RUN_PREFIX" ]]; then
+            echo "ERROR: cc27 uses fixed run names; run with no prefix" >&2
+            exit 1
+        fi
+        local cc_common="epochs=50000 eval_interval=2000 lr=1e-4 puzzle_emb_lr=1e-4 weight_decay=1.0 puzzle_emb_weight_decay=1.0 +log_z_dynamics=True +z_snapshot=True checkpoint_every_eval=False +eval_save_outputs=[inputs,labels,preds,puzzle_identifiers]"
+        local cc_trm_args="arch.mlp_t=False arch.H_cycles=3 arch.L_cycles=6 arch.L_layers=2"
+        local cc_g7_h1="arch.H_layers=2 arch.halt_max_steps=1 arch.loops=21 arch.loop_grad_cycles=7 arch.loop_input_injection=True"
+        local cc_g7_h16="arch.H_layers=2 arch.loops=21 arch.loop_grad_cycles=7 arch.loop_input_injection=True arch.halt_exploration_prob=0.1 arch.act_enabled=True arch.act_inference=False arch.halt_max_steps=16"
+        # cc27_emit <tag: trm|g7|g7s|noz> <halt> <k> <s>
+        cc27_emit() {
+            local tag="$1" halt="$2" ck="$3" cs="$4" carch cargs
+            case "${tag}_${halt}" in
+                trm_1)   carch="trm";                    cargs="${cc_trm_args} arch.halt_max_steps=1" ;;
+                trm_16)  carch="trm";                    cargs="${cc_trm_args} arch.halt_max_steps=16 +z_seq_metrics=True" ;;
+                noz_1)   carch="trm_singlez";            cargs="${cc_trm_args} arch.halt_max_steps=1" ;;
+                g7_1)    carch="transformers_baseline";  cargs="${cc_g7_h1}" ;;
+                g7_16)   carch="transformers_baseline";  cargs="${cc_g7_h16}" ;;
+                g7s_1)   carch="transformers_baseline_skip"; cargs="${cc_g7_h1} arch.loop_input_injection_skip_period=7" ;;
+                *) echo "ERROR: cc27_emit: bad arm ${tag}_${halt}" >&2; exit 1 ;;
+            esac
+            enqueue "cc27_${tag}_h${halt}_k${ck}_s${cs}" <<EOF
+uv run pretrain.py arch=${carch} ${cc_common} \\
+    ${cargs} \\
+    evaluators="[]" \\
+    data_paths="[data/power_permutation/d1/${ck}]" \\
+    seed=${cs} \\
+    +k=${ck} \\
+    +project_name="power_permutation" \\
+    +run_group="cc27" \\
+    +run_name="cc27_${tag}_h${halt}_k${ck}_s${cs}" \\
+    +cell_id='"arm=cc27,cohort=${tag},halt=${halt},n=10,k=${ck},s=${cs}"' \\
+    ema=True
+EOF
+        }
+        local ck cs
+        if [[ " $STAGES " == *" cc27_r2 "* ]]; then
+            for ck in 5 6 7; do for cs in 41 42 43 44 45 46; do
+                cc27_emit trm 1 "$ck" "$cs"; cc27_emit g7 1 "$ck" "$cs"
+            done; done
+        fi
+        if [[ " $STAGES " == *" cc27_r4 "* ]]; then
+            for ck in 5 6 7; do for cs in 61 62 63; do
+                cc27_emit noz 1 "$ck" "$cs"
+            done; done
+        fi
+        if [[ " $STAGES " == *" cc27_r3 "* ]]; then
+            for ck in 5 6 7 3; do for cs in 51 52 53; do
+                cc27_emit g7s 1 "$ck" "$cs"
+            done; done
+        fi
+        if [[ " $STAGES " == *" cc27_r1 "* ]]; then
+            for ck in 5 6 7; do for cs in 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35; do
+                cc27_emit trm 16 "$ck" "$cs"; cc27_emit g7 16 "$ck" "$cs"
+            done; done
+        fi
+        return 0
+    fi
+    # -- cx27 (2026-11-19): ICML 2027 addendum cohort, D1 k in {5,6,7}, 3 seeds per k per cell --
+    # Prereg: lab/23_reports/11_lab-reports/2026-11-19_icml27-addendum-prereg-DRAFT.md.
+    # Dedicated stages (no existing array or stage touched); explicit selection only, empty prefix:
+    #   cx27_xf  looped factorial, arch=transformers_baseline_px, halt 16, 7 cells x 3 seeds x k 5 6 7 (63)
+    #            body = the cc27_g7_h16 body with arch=transformers_baseline -> transformers_baseline_px and
+    #            three explicit overrides arch.num_heads / arch.puzzle_emb_len /
+    #            arch.loop_input_injection_skip_period appended after the last arch override.
+    #            cell (heads,prefix,period) seeds: px12p1s7 74-76; px8p1s0 77-79; px8p1s7 81-83;
+    #            px12p16s0 84-86; px12p16s7 87-89; px8p16s0 91-93; px8p16s7 94-96
+    #   cx27_x5  trm_singlez halt 16, k 5 6 7, seeds 71-73 (9); body = cc27_trm_h16 body with only arch swapped
+    #   cx27_x7  trm_singlez halt 1, lr=3e-5 puzzle_emb_lr=3e-5, k 5 6 7, seeds 97-99 (9); body = cc27_noz_h1
+    #            body with only the two learning-rate values changed (weight-decay overrides kept)
+    # Run names: cx27_px{H}p{P}s{S}_h16_k{k}_s{s}, cx27_noz_h16_k{k}_s{s}, cx27_nozlr_h1_k{k}_s{s}.
+    # Order inside a stage: k -> seed. Data root fixed to D1. Nothing is emitted under the default STAGES.
+    if [[ " $STAGES " == *" cx27_xf "* || " $STAGES " == *" cx27_x5 "* || " $STAGES " == *" cx27_x7 "* ]]; then
+        if [[ -n "$RUN_PREFIX" ]]; then
+            echo "ERROR: cx27 uses fixed run names; run with no prefix" >&2
+            exit 1
+        fi
+        local cx_common="epochs=50000 eval_interval=2000 lr=1e-4 puzzle_emb_lr=1e-4 weight_decay=1.0 puzzle_emb_weight_decay=1.0 +log_z_dynamics=True +z_snapshot=True checkpoint_every_eval=False +eval_save_outputs=[inputs,labels,preds,puzzle_identifiers]"
+        local cx_trm_args="arch.mlp_t=False arch.H_cycles=3 arch.L_cycles=6 arch.L_layers=2"
+        local cx_g7_h16="arch.H_layers=2 arch.loops=21 arch.loop_grad_cycles=7 arch.loop_input_injection=True arch.halt_exploration_prob=0.1 arch.act_enabled=True arch.act_inference=False arch.halt_max_steps=16"
+        # cx27_emit <tag> <halt> <k> <s> <heads> <prefix> <period>   (tag: pxHpPsS | noz | nozlr)
+        cx27_emit() {
+            local tag="$1" halt="$2" ck="$3" cs="$4" xh="$5" xp="$6" xs="$7" carch ccommon cargs
+            ccommon="$cx_common"
+            case "$tag" in
+                noz)   carch="trm_singlez"; cargs="${cx_trm_args} arch.halt_max_steps=16 +z_seq_metrics=True" ;;
+                nozlr) carch="trm_singlez"; cargs="${cx_trm_args} arch.halt_max_steps=1"
+                       ccommon="${cx_common/lr=1e-4 puzzle_emb_lr=1e-4/lr=3e-5 puzzle_emb_lr=3e-5}" ;;
+                px*)   carch="transformers_baseline_px"
+                       cargs="${cx_g7_h16} arch.num_heads=${xh} arch.puzzle_emb_len=${xp} arch.loop_input_injection_skip_period=${xs}" ;;
+                *) echo "ERROR: cx27_emit: bad arm ${tag}" >&2; exit 1 ;;
+            esac
+            enqueue "cx27_${tag}_h${halt}_k${ck}_s${cs}" <<EOF
+uv run pretrain.py arch=${carch} ${ccommon} \\
+    ${cargs} \\
+    evaluators="[]" \\
+    data_paths="[data/power_permutation/d1/${ck}]" \\
+    seed=${cs} \\
+    +k=${ck} \\
+    +project_name="power_permutation" \\
+    +run_group="cx27" \\
+    +run_name="cx27_${tag}_h${halt}_k${ck}_s${cs}" \\
+    +cell_id='"arm=cx27,cohort=${tag},halt=${halt},n=10,k=${ck},s=${cs}"' \\
+    ema=True
+EOF
+        }
+        local ck cs cxspec
+        # seed|heads|prefix|period   (cell tag = px{heads}p{prefix}s{period})
+        local -a cx_xf_cells=(
+            "74|12|1|7" "75|12|1|7" "76|12|1|7"
+            "77|8|1|0"  "78|8|1|0"  "79|8|1|0"
+            "81|8|1|7"  "82|8|1|7"  "83|8|1|7"
+            "84|12|16|0" "85|12|16|0" "86|12|16|0"
+            "87|12|16|7" "88|12|16|7" "89|12|16|7"
+            "91|8|16|0" "92|8|16|0" "93|8|16|0"
+            "94|8|16|7" "95|8|16|7" "96|8|16|7"
+        )
+        local cxh cxp cxs
+        if [[ " $STAGES " == *" cx27_x5 "* ]]; then
+            for ck in 5 6 7; do for cs in 71 72 73; do
+                cx27_emit noz 16 "$ck" "$cs" 0 0 0
+            done; done
+        fi
+        if [[ " $STAGES " == *" cx27_xf "* ]]; then
+            for ck in 5 6 7; do for cxspec in "${cx_xf_cells[@]}"; do
+                IFS='|' read -r cs cxh cxp cxs <<< "$cxspec"
+                cx27_emit "px${cxh}p${cxp}s${cxs}" 16 "$ck" "$cs" "$cxh" "$cxp" "$cxs"
+            done; done
+        fi
+        if [[ " $STAGES " == *" cx27_x7 "* ]]; then
+            for ck in 5 6 7; do for cs in 97 98 99; do
+                cx27_emit nozlr 1 "$ck" "$cs" 0 0 0
+            done; done
+        fi
+        return 0
+    fi
+    # -- legacy_redo (2026-11-03, user decision; PIP handoff 03:42 §3) --
+    # Re-run the 11 legacy Sigma_k_fig12 cells that never completed:
+    #   EXP-006 2x-extension arm (fig1x2_*, epochs=200000): noz_iter k7 s1-3,
+    #     z_iter k4_s2, z_iter k5_s1  (4/9 of the arm completed in 2026-07)
+    #   EXP-007 k11 discriminator arm (fig1d_*, epochs=100000): {noz,z}_iter
+    #     k11 s1-3  (the 2026-07-20 runs died at start: 0 eval, 0 ckpt)
+    # Bodies reproduce checkpoints/Sigma_k_fig12/<run>/all_config.yaml of the
+    # original runs field-for-field (python difflib 2026-11-03 against
+    # fig1x2_tf_noz_iter_k5_s1, which completed): legacy fig1 protocol, D0
+    # data/sigma_k_10/<k>, flat LR, checkpoint_every_eval=True,
+    # log_z_dynamics=True, z_snapshot=False, no eval_save_outputs/+k/+cell_id.
+    # Run names are the ORIGINAL names (no prefix) so analysis/pr_extract.py
+    # and the tau harness parse them; wandb will hold a second run id per
+    # name -- local_tau_from_datastore.py keeps the id reaching the highest
+    # step (restart guard). Emitted only with STAGES=legacy_redo and an EMPTY
+    # run prefix.  k11 data: data/sigma_k_10/11 (exists, built 2026-07).
+    if [[ " $STAGES " == *" legacy_redo "* ]]; then
+        if [[ -n "$RUN_PREFIX" ]]; then
+            echo "ERROR: legacy_redo uses fixed original run names; run with no prefix" >&2
+            exit 1
+        fi
+        local legacy_common="eval_interval=2000 lr=1e-4 lr_min_ratio=1.0 lr_warmup_steps=2000 puzzle_emb_lr=1e-4 weight_decay=1.0 puzzle_emb_weight_decay=1.0 checkpoint_every_eval=True +log_z_dynamics=True +z_snapshot=False arch.H_cycles=3 arch.L_cycles=6 arch.L_layers=2 arch.halt_max_steps=1"
+        local lspec lname larch lk ls lep
+        for lspec in \
+            "fig1x2_tf_noz_iter_k7_s1|trm_singlez|7|1|200000" \
+            "fig1x2_tf_noz_iter_k7_s2|trm_singlez|7|2|200000" \
+            "fig1x2_tf_noz_iter_k7_s3|trm_singlez|7|3|200000" \
+            "fig1x2_tf_z_iter_k4_s2|trm|4|2|200000" \
+            "fig1x2_tf_z_iter_k5_s1|trm|5|1|200000" \
+            "fig1d_tf_noz_iter_k11_s1|trm_singlez|11|1|100000" \
+            "fig1d_tf_noz_iter_k11_s2|trm_singlez|11|2|100000" \
+            "fig1d_tf_noz_iter_k11_s3|trm_singlez|11|3|100000" \
+            "fig1d_tf_z_iter_k11_s1|trm|11|1|100000" \
+            "fig1d_tf_z_iter_k11_s2|trm|11|2|100000" \
+            "fig1d_tf_z_iter_k11_s3|trm|11|3|100000"; do
+            IFS='|' read -r lname larch lk ls lep <<< "$lspec"
+            enqueue "$lname" <<EOF
+uv run pretrain.py arch=${larch} epochs=${lep} ${legacy_common} \\
+    evaluators="[]" \\
+    data_paths="[data/sigma_k_10/${lk}]" \\
+    seed=${ls} \\
+    +project_name="Sigma_k_fig12" \\
+    +run_name="${lname}" \\
+    ema=True
+EOF
+        done
+        return 0
+    fi
     # -- 0) PERF-001 profiler-only preset: prefix-selected and exclusive --
     if [[ "$RUN_PREFIX" == "perf0" ]]; then
         if (( ! DRY_RUN )) && [[ "${PERF0_ALLOW_ENQUEUE:-0}" != "1" ]]; then
@@ -959,6 +1398,24 @@ main() {
             done
         done
     fi
+    # -- 2c'-h8) heads8 control of the ltf g7 arm (see LTFH8_ARMS above) --
+    # k-major, then seed (k=3 first: the trainability gate is the first observation).
+    # Bodies equal the landed g7 bodies plus arch.num_heads=8 and the identity
+    # fields (run_group, run_name, cell_id). Explicit selection only.
+    if [[ " $STAGES " == *" ltfh8 "* ]]; then
+        RUN_GROUP="${RUN_GROUP_LTFH8:-ltfh8}"
+        for spec in "${LTFH8_ARMS[@]}"; do
+            IFS='|' read -r tag arch_args <<< "$spec"
+            for k in "${LTFH8_K[@]}"; do
+                for s in "${LTFH8_SEEDS[@]}"; do
+                    CELL_ID="arm=ltfh8,ltf=${tag},lay=2,n=10,k=${k},s=${s}"
+                    emit_job "${prefix}ltfh8_${tag}_lay2_k${k}_s${s}" \
+                        "transformers_baseline" "$k" "$s" \
+                        "arch.H_layers=2 arch.halt_max_steps=1 ${arch_args}"
+                done
+            done
+        done
+    fi
     # -- 2c'') ACT axis (see ACT_ARMS above; EXP-016 §4.4) --
     # RUN_GROUP override is RUN_GROUP_ACTAX, NOT RUN_GROUP_ACT: the latter
     # already belongs to stage ablation_act, and sharing it would silently
@@ -1060,6 +1517,61 @@ main() {
                 done
             done
         done
+    fi
+    # -- 2f) EXP-018 stages (see the e018 declaration block above) ---------
+    # Stage-wise: one token per invocation, `df` gate first (real runs).
+    if [[ " $STAGES " == *" e018_g1 "* ]]; then
+        e018_gate g1 114; e018_emit_arms E018_G1_ARMS
+    fi
+    if [[ " $STAGES " == *" e018_g3 "* ]]; then
+        e018_gate g3 18; e018_emit_arms E018_G3_ARMS
+    fi
+    if [[ " $STAGES " == *" e018_g4 "* ]]; then
+        e018_gate g4 54; e018_emit_arms E018_G4_ARMS
+    fi
+    if [[ " $STAGES " == *" e018_g2 "* ]]; then
+        e018_gate g2 78; e018_emit_arms E018_G2_ARMS
+    fi
+    if [[ " $STAGES " == *" e018_lb "* ]]; then
+        if (( ! DRY_RUN )) && [[ "${E018_ALLOW_BLOCKED:-0}" != "1" ]]; then
+            echo "ERROR: e018_lb = LB2 (zH_freeze) runs, held: requester B2 (stop-gradient) is a no-op here" >&2
+            echo "       (EXP-018_FREEZE_WITNESS.md W4). Dry-run only unless E018_ALLOW_BLOCKED=1." >&2
+            exit 1
+        fi
+        e018_gate lb 6; e018_emit_arms E018_LB_ARMS
+    fi
+    # -- 2g) EXP-020 stages (see the e020 declaration block above) ---------
+    # epochs=<n> is an emit_job extra arg, so it lands AFTER common_args' epochs=50000 and wins
+    # under Hydra last-key-wins (same pattern as invcells: job 0418 body has both, all_config 100000).
+    if [[ " $STAGES " == *" e020_s1 "* || " $STAGES " == *" e020_s2 "* ]]; then
+        local _e020_root="$DATA_ROOT" _e020_proj="$WANDB_PROJECT" _e020_grp="$RUN_GROUP"
+        DATA_ROOT="$E020_DATA_ROOT"; WANDB_PROJECT="$E020_PROJECT"
+        if [[ " $STAGES " == *" e020_s1 "* ]]; then
+            RUN_GROUP="e020_s1"
+            for k in "${E020_S1_K[@]}"; do
+                for s in "${E020_S1_SEEDS[@]}"; do
+                    CELL_ID="arm=fig1,block=tf,z=0,it=1,n=10,k=${k},s=${s},epochs=${E020_S1_EPOCHS}"
+                    emit_job "${prefix}fig1_tf_noz_iter_ep76k_k${k}_s${s}" trm_singlez "$k" "$s" \
+                        "${E020_NOZ}" "arch.L_layers=2 arch.halt_max_steps=1" \
+                        "epochs=${E020_S1_EPOCHS}"
+                    CELL_ID="arm=act,cohort=noz_iter,halt=16,n=10,k=${k},s=${s},epochs=${E020_S1_EPOCHS}"
+                    emit_job "${prefix}act_noz_iter_h16_ep76k_k${k}_s${s}" trm_singlez "$k" "$s" \
+                        "${E020_NOZ} arch.L_layers=2 arch.halt_exploration_prob=0.1" \
+                        "arch.halt_max_steps=16" "epochs=${E020_S1_EPOCHS}"
+                done
+            done
+        fi
+        if [[ " $STAGES " == *" e020_s2 "* ]]; then
+            RUN_GROUP="e020_s2"
+            for s in "${E020_S2_SEEDS[@]}"; do
+                for k in "${E020_S2_K[@]}"; do
+                    CELL_ID="arm=act,cohort=ltf_fullgrad,halt=16,n=10,k=${k},s=${s},epochs=50000"
+                    emit_job "${prefix}act_ltf_fullgrad_h16_ep50k_k${k}_s${s}" transformers_baseline "$k" "$s" \
+                        "${E020_LTF}" "arch.halt_max_steps=16"
+                done
+            done
+        fi
+        DATA_ROOT="$_e020_root"; WANDB_PROJECT="$_e020_proj"; RUN_GROUP="$_e020_grp"
     fi
 }
 
