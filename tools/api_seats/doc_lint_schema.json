@@ -1,0 +1,28 @@
+{
+  "type": "object",
+  "properties": {
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": "string",
+            "enum": ["internal_contradiction", "unsupported_claim", "modal_inflation",
+                     "prereg_mismatch", "stale_or_inconsistent_status", "undefined_term_or_threshold"]
+          },
+          "severity": {"type": "string", "enum": ["blocking", "non_blocking"]},
+          "location": {"type": "string"},
+          "quote_source": {"type": "string", "enum": ["RESULTS", "PREREG"]},
+          "quote": {"type": "string"},
+          "description": {"type": "string"},
+          "suggested_fix": {"type": "string"}
+        },
+        "required": ["category", "severity", "location", "quote_source", "quote", "description", "suggested_fix"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["findings"],
+  "additionalProperties": false
+}
