@@ -1,0 +1,180 @@
+# Maintained forbidden-claim vocabulary for run-card prose (tools/wandb_run_index/prose_check.py, rule R5).
+# One regex per line (case-insensitive, searched in each prose field), `#` comments. Sections: [en] [ko] [exempt].
+# English is the contract (the prompt demands English, descriptive prose: "the table records X at step Y").
+# The checker also rejects every character outside printable ASCII (after NFKC), so [ko] is only a second line of defence.
+# Sections: [en] verdict/hypothesis/judgement words; [status] words about how/whether a run ended (allowed only inside the
+# script-supplied sentences or as the card's literal status value); [numwords] spelled-out numbers.
+# [exempt] = literal phrases removed before scanning (labels the cards themselves print; never claims).
+# False-positive audit: tools/api_batch/tests/test_ab_runcard.py (honest-sentence corpus + script-built compliant outputs).
+
+[en]
+# verdict / evidential
+\bprov(?:en|ed|es?|ing)\b
+\bdisprov\w*
+\bfalsif\w*
+\brefut\w*
+\bsupport(?:s|ed|ing)?\b
+\bconfirm\w*
+\bverif(?:y|ies|ied|ication)\b
+\bvalidat\w*
+\bdemonstrat\w*
+\bestablish\w*
+\bevidenc\w*
+\bevident\w*
+\bconsistent with\b
+\bconsistently\b
+\bjustif\w*
+\bcorroborat\w*
+\bsubstantiat\w*
+\bshow(?:s|ed|n)? that\b
+\bindicat\w*
+\bsuggest\w*
+\bimpl(?:y|ies|ied)\b
+\breveal\w*
+\bgeneraliz\w*
+\bgeneralis\w*
+\bmemoriz\w*
+\bmemoris\w*
+\boverfit\w*
+\bsolved\b
+\bperfect\w*
+\bfail(?:s|ed|ing|ure|ures)?\b
+\bsucce(?:ss|ssful|ssfully|ed|eds|eded)\b
+\bimprov\w*
+\bdegrad\w*
+\bcollaps\w*
+converg\w*
+\blearn(?:s|ed)\b
+\bunlearn\w*
+# causal / mechanism
+\bbecause\b
+\bdue to\b
+\bowing to\b
+\bthanks to\b
+\bas a result\b
+\bresults? (?:from|in)\b
+\bleads? to\b
+\bled to\b
+\bhence\b
+\bthus\b
+\btherefore\b
+\bconsequently\b
+\bcaus(?:e|es|ed|al|ing)\b
+\bexplain\w*
+\bmechanism\w*
+\bdriv(?:e|es|en|ing) by\b
+\baccount(?:s|ed)? for\b
+# judgement / ranking / resolving attribution
+\bgood\b
+\bpoor\w*
+\bstrong\w*
+\bweak\w*
+\bbetter\b
+\bworse\b
+\bbest\b
+\bworst\b
+\blikely\b
+\bprobabl\w*
+\bprimar\w*
+\bmainly\b
+\bbelongs? to\b
+\bactually\b
+\bplausibl\w*
+\bnotabl\w*
+\bremarkabl\w*
+\bsurpris\w*
+# hypothesis talk and further verdict / evaluation words (r4)
+\bhypothes\w*
+\bclaim\w*
+\btheor(?:y|ies)\b
+\bconjectur\w*
+\bpredict\w*
+\bexpect\w*
+\bfavou?r\w*
+\bholds?\b
+\bbolster\w*
+\brobust\w*
+\bagree\w*
+\bcontradict\w*
+\bin line with\b
+\bcompatible\b
+\bcredence\b
+\bhealthy\b
+\bexcellent\b
+\bsuperior\b
+\bwin(?:s|ning)?\b
+\bwork(?:s|ed|ing)\b
+\boutperform\w*
+\binconclusive\b
+\bsolves?\b
+\bagainst\b
+\bencourag\w*
+\bunstable\b
+\bstab(?:le|ility)\b
+\b(?:negative|positive) result\b
+\bbolster\w*
+
+[status]
+# how or whether a run ended / is progressing: allowed only inside a script-supplied sentence or as the card's literal status value
+crash\w*
+fail\w*
+diverg\w*
+abort\w*
+kill\w*
+stall\w*
+\bhang\w*
+\bhung\b
+running
+in progress
+ongoing
+complet\w*
+finish\w*
+\bdone\b
+\b(?:is|was|are|were|been|has|had) over\b
+\bend(?:s|ed|ing)?\b
+wrapp\w*
+terminat\w*
+\bterminal\b
+succe\w*
+converg\w*
+final\w*
+\bstopp\w*
+conclu\w*
+\bhalt\w*
+\bexit\w*
+\bdied\b
+\bclose of\b
+\bstill\b
+\bprocessing\b
+
+[numwords]
+# spelled-out numbers: digits copied from the table are the only allowed number form
+\b(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)\b
+\b(?:hundreds?|thousands?|millions?|billions?|half|halves|double[ds]?|twice|thrice|triple[ds]?|dozens?|once)\b
+
+[ko]
+입증
+반증
+지지
+시사
+증명
+확인
+뒷받침
+검증
+따라서
+때문
+원인
+결과적으로
+일반화
+실패
+성공
+수렴
+붕괴
+
+[exempt]
+api-confirmed
+not evidence
+not verified against pretrain.py
+verified on this run only
+assumed extension of a verified definition
+working gloss
