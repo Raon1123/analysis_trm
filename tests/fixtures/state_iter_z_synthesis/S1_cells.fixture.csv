@@ -1,0 +1,60 @@
+# SYNTHETIC FIXTURE - columns/order = tools/state_iter_z_synthesis/s1.py CELL_FIELDS; classes = S0r2 confirmed classification, q_token = s1.q_tokens; tokens, scope and text are invented
+q,s,kind,expected_class,s1_class,s0_confirmed_class,branch,class_match,reason,q_token,key_status,metric_keys_read,values_policy,n_table_rows,n_runs,n_runs_evidence_use,counts_by_cohort,cohort_note,token_tier,token_V,token_N,token_file,token_locator,token_scope,token_discrepancy,token_note,token_restatement,marker,registry_status_N,atom_cohort,atom_verdict_scope,atom_prohibited_upgrade,notes
+Q-I1,H-108 sweep,E,A-DESC,A-DESC,A-DESC,fixture,True,,Q-INHERIT,,,FIXTURE: values in S1_table,0,0,0,,,,,,,,,,,,,,,,,SYNTHETIC
+Q-I1,CL-0003,A,A-VERDICT,A-VERDICT,A-VERDICT,fixture,True,,Q-INHERIT,,,none: atom verdict token only (no metric value),0,0,0,,,1,supported,,FIXTURE/synthetic.md,line 1,,,,,,,FIXTURE,FIXTURE scope text (synthetic),FIXTURE prohibited text (synthetic),SYNTHETIC
+Q-I1,CL-0005,A,A-VERDICT,A-VERDICT,A-VERDICT,fixture,True,,Q-INHERIT,,,none: atom verdict token only (no metric value),0,0,0,,,1,supported,,FIXTURE/synthetic.md,line 1,,,,,,,FIXTURE,FIXTURE scope text (synthetic),FIXTURE prohibited text (synthetic),SYNTHETIC
+Q-I1,FG-0001,A,A-VERDICT,A-VERDICT,A-VERDICT,fixture,True,,Q-INHERIT,,,none: atom verdict token only (no metric value),0,0,0,,,1,supported,,FIXTURE/synthetic.md,line 1,,,,,,,FIXTURE,FIXTURE scope text (synthetic),FIXTURE prohibited text (synthetic),SYNTHETIC
+Q-I2,EXP-001,E,A-DESC,A-DESC,A-DESC,fixture,True,,Q-INHERIT,,,FIXTURE: values in S1_table,3,3,3,legacy:3,"legacy, 신규 clean 코호트와 비교 불가",,,,,,,,,,,,,,,SYNTHETIC
+Q-I2,EXP-005,E,A-DESC,A-DESC,A-DESC,fixture,True,,Q-INHERIT,,,FIXTURE: values in S1_table,0,0,0,,"legacy, 신규 clean 코호트와 비교 불가",,,,,,,,,,,,,,,SYNTHETIC
+Q-I2,EXP-010,E,X-PROV,X-PROV,X-PROV,fixture,True,,Q-INHERIT,,,none: class X-PROV,0,0,0,,,,,,,,,,,,,,,,,SYNTHETIC
+Q-I2,EXP-011,E,A-DESC,X-ABSENT,X-ABSENT,fixture,False,S0r2 confirmed class X-ABSENT != PREREG 7.0.5 expected A-DESC (known mismatch; synthetic fixture),Q-INHERIT,,,none: class X-ABSENT,0,0,0,,,,,,,,,,,,,,,,,SYNTHETIC
+Q-I2,EXP-012/probe,E,A-DESC,A-DESC,A-DESC,fixture,True,,Q-INHERIT,,,FIXTURE: values in S1_table,6,6,5,clean-D0:6,,,,,,,,,,,,,,,,SYNTHETIC
+Q-I2,EXP-012/sealed,E,D-SEALED,D-SEALED,D-SEALED,fixture,True,,Q-INHERIT,,,none: D-SEALED (synthetic fixture),0,0,0,,,,,,,,,,,,,,,,,SYNTHETIC
+Q-I2,EXP-013,E,X-ABSENT,X-ABSENT,X-ABSENT,fixture,True,,Q-INHERIT,,,none: class X-ABSENT,0,0,0,,,,,,,,,,,,,,,,,SYNTHETIC
+Q-I2,H-022,H,A-VERDICT,A-VERDICT,A-VERDICT,fixture,True,,Q-INHERIT,,,none: H row (status word only),0,0,0,,,4,conditional|supported,,FIXTURE/synthetic.md,line 1,card-level (synthetic fixture component note),,,,,,,,,SYNTHETIC
+Q-I2,H-023,H,A-VERDICT,A-VERDICT,A-VERDICT,fixture,True,,Q-INHERIT,,,none: H row (status word only),0,0,0,,,4,partial,,FIXTURE/synthetic.md,line 1,,,,,,,,,,SYNTHETIC
+Q-I2,H-025,H,A-VERDICT,A-VERDICT,A-VERDICT,fixture,True,,Q-INHERIT,,,none: H row (status word only),0,0,0,,,4,partial,,FIXTURE/synthetic.md,line 1,,,,,,,,,,SYNTHETIC
+Q-I3,EXP-025,E,A-DESC,A-DESC,A-DESC,fixture,True,,Q-INHERIT,,,FIXTURE: values in S1_table,2,2,2,clean-D1:2,,,,,,,,,,,,,,,,SYNTHETIC
+Q-I3,EXP-022,E,A-DESC,A-DESC,A-DESC,fixture,True,,Q-INHERIT,,,FIXTURE: values in S1_table,0,0,0,,,,,,,,,,,,,,,,,SYNTHETIC
+Q-I3,EXP-023,E,D-PREJUDGE,D-PREJUDGE,D-PREJUDGE,fixture,True,,Q-INHERIT,,,none: D-PREJUDGE (O-2: status/run count only; synthetic fixture),0,0,0,,,,,,,,,,,,,,,,,SYNTHETIC
+Q-I3,FG-0006,A,A-VERDICT,A-VERDICT,A-VERDICT,fixture,True,,Q-INHERIT,,,none: atom verdict token only (no metric value),0,0,0,,,1,supported,,FIXTURE/synthetic.md,line 1,,,,,,,FIXTURE,FIXTURE scope text (synthetic),FIXTURE prohibited text (synthetic),SYNTHETIC
+Q-I3,H-199,H,A-VERDICT,A-VERDICT,A-VERDICT,fixture,True,,Q-INHERIT,,,none: H row (status word only),0,0,0,,,2,partial,,FIXTURE/synthetic.md,line 1,,,,,,,,,,SYNTHETIC
+Q-I4,EXP-011,E,A-DESC,X-ABSENT,X-ABSENT,fixture,False,S0r2 confirmed class X-ABSENT != PREREG 7.0.5 expected A-DESC (known mismatch; synthetic fixture),Q-DESC-ONLY,,,none: class X-ABSENT,0,0,0,,,,,,,,,,,,,,,,,SYNTHETIC
+Q-I4,EXP-016,E,D-LOCKED,D-LOCKED,D-LOCKED,fixture,True,,Q-DESC-ONLY,,,FIXTURE: values in S1_table,1,1,1,clean-D1:1,,,,,,,,,재진술 문자열 S0 미기록 — 재진술 없음,,현황 기술(확증 아님),,,,,SYNTHETIC
+Q-I4,EXP-020,E,D-PREJUDGE,D-PREJUDGE,D-PREJUDGE,fixture,True,,Q-DESC-ONLY,,,none: D-PREJUDGE (O-2: status/run count only; synthetic fixture),1,1,1,clean-D1:1,,,,,,,,,,,,,,,,SYNTHETIC
+Q-I4,H-200,H,D-LOCKED,D-LOCKED,D-LOCKED,fixture,True,,Q-DESC-ONLY,,,none: H row (status word only),0,0,0,,,2,partial,,FIXTURE/synthetic.md,line 1,,,,FIXTURE status line (synthetic),현황 기술(확증 아님),,,,,SYNTHETIC
+Q-I5,CL-0004,A,A-VERDICT,A-VERDICT,A-VERDICT,fixture,True,,Q-INHERIT,,,none: atom verdict token only (no metric value),0,0,0,,,1,supported,,FIXTURE/synthetic.md,line 1,,,,,,,FIXTURE,FIXTURE scope text (synthetic),FIXTURE prohibited text (synthetic),SYNTHETIC
+Q-I5,FG-0002,A,A-VERDICT,A-VERDICT,A-VERDICT,fixture,True,,Q-INHERIT,,,none: atom verdict token only (no metric value),0,0,0,,,1,supported,,FIXTURE/synthetic.md,line 1,,,,,,,FIXTURE,FIXTURE scope text (synthetic),FIXTURE prohibited text (synthetic),SYNTHETIC
+Q-Z1,EXP-001,E,A-DESC,A-DESC,A-DESC,fixture,True,,Q-INHERIT,,,FIXTURE: values in S1_table,0,0,0,,"legacy, 신규 clean 코호트와 비교 불가",,,,,,,,,,,,,,,SYNTHETIC
+Q-Z1,EXP-004,E,A-DESC,A-DESC,A-DESC,fixture,True,,Q-INHERIT,,,FIXTURE: values in S1_table,0,0,0,,"legacy, 신규 clean 코호트와 비교 불가",,,,,,,,,,,,,,,SYNTHETIC
+Q-Z1,EXP-005,E,A-DESC,A-DESC,A-DESC,fixture,True,,Q-INHERIT,,,FIXTURE: values in S1_table,2,1,1,legacy:1,"legacy, 신규 clean 코호트와 비교 불가",,,,,,,,,,,,,,,SYNTHETIC
+Q-Z1,EXP-007,E,A-DESC,A-DESC,A-DESC,fixture,True,,Q-INHERIT,,,FIXTURE: values in S1_table,0,0,0,,"legacy, 신규 clean 코호트와 비교 불가",,,,,,,,,,,,,,,SYNTHETIC
+Q-Z1,EXP-010,E,X-PROV,X-PROV,X-PROV,fixture,True,,Q-INHERIT,,,none: class X-PROV,0,0,0,,,,,,,,,,,,,,,,,SYNTHETIC
+Q-Z1,EXP-012/probe,E,A-DESC,A-DESC,A-DESC,fixture,True,,Q-INHERIT,,,FIXTURE: values in S1_table,2,2,2,clean-D0:2,,,,,,,,,,,,,,,,SYNTHETIC
+Q-Z1,EXP-012/sealed,E,D-SEALED,D-SEALED,D-SEALED,fixture,True,,Q-INHERIT,,,none: D-SEALED (synthetic fixture),0,0,0,,,,,,,,,,,,,,,,,SYNTHETIC
+Q-Z1,EXP-025,E,A-DESC,A-DESC,A-DESC,fixture,True,,Q-INHERIT,,,FIXTURE: values in S1_table,0,0,0,,,,,,,,,,,,,,,,,SYNTHETIC
+Q-Z1,H-023,H,A-VERDICT,A-VERDICT,A-VERDICT,fixture,True,,Q-INHERIT,,,none: H row (status word only),0,0,0,,,4,partial,,FIXTURE/synthetic.md,line 1,,,,,,,,,,SYNTHETIC
+Q-Z1,H-025,H,A-VERDICT,A-VERDICT,A-VERDICT,fixture,True,,Q-INHERIT,,,none: H row (status word only),0,0,0,,,4,partial,,FIXTURE/synthetic.md,line 1,,,,,,,,,,SYNTHETIC
+Q-Z1,H-A,H,A-DESC,A-DESC,A-DESC,fixture,True,,Q-INHERIT,,,none: H row (status word only),0,0,0,,,4,,under-test,FIXTURE/synthetic.md,line 1,,,,,,,,,,SYNTHETIC
+Q-Z2,EXP-001,E,A-DESC,A-DESC,A-DESC,fixture,True,,Q-INHERIT,,,FIXTURE: values in S1_table,0,0,0,,"legacy, 신규 clean 코호트와 비교 불가",,,,,,,,,,,,,,,SYNTHETIC
+Q-Z2,EXP-004,E,A-DESC,A-DESC,A-DESC,fixture,True,,Q-INHERIT,,,FIXTURE: values in S1_table,0,0,0,,"legacy, 신규 clean 코호트와 비교 불가",,,,,,,,,,,,,,,SYNTHETIC
+Q-Z2,EXP-007,E,A-DESC,A-DESC,A-DESC,fixture,True,,Q-INHERIT,,,FIXTURE: values in S1_table,0,0,0,,"legacy, 신규 clean 코호트와 비교 불가",,,,,,,,,,,,,,,SYNTHETIC
+Q-Z2,CL-0001,A,A-VERDICT,A-VERDICT,A-VERDICT,fixture,True,,Q-INHERIT,,,none: atom verdict token only (no metric value),0,0,0,,,1,supported,,FIXTURE/synthetic.md,line 1,,,,,,,FIXTURE,FIXTURE scope text (synthetic),FIXTURE prohibited text (synthetic),SYNTHETIC
+Q-Z2,CL-0002,A,A-VERDICT,A-VERDICT,A-VERDICT,fixture,True,,Q-INHERIT,,,none: atom verdict token only (no metric value),0,0,0,,,1,supported,,FIXTURE/synthetic.md,line 1,,,,,,,FIXTURE,FIXTURE scope text (synthetic),FIXTURE prohibited text (synthetic),SYNTHETIC
+Q-Z2,H-A,H,A-DESC,A-DESC,A-DESC,fixture,True,,Q-INHERIT,,,none: H row (status word only),0,0,0,,,4,,under-test,FIXTURE/synthetic.md,line 1,,,,,,,,,,SYNTHETIC
+Q-Z2,H-023,H,A-VERDICT,A-VERDICT,A-VERDICT,fixture,True,,Q-INHERIT,,,none: H row (status word only),0,0,0,,,4,partial,,FIXTURE/synthetic.md,line 1,,,,,,,,,,SYNTHETIC
+Q-Z3,EXP-002,E,A-DESC,A-DESC,A-DESC,fixture,True,,Q-INHERIT,,,FIXTURE: values in S1_table,1,1,1,legacy:1,"legacy, 신규 clean 코호트와 비교 불가",,,,,,,,,,,,,,,SYNTHETIC
+Q-Z3,EXP-004,E,A-DESC,A-DESC,A-DESC,fixture,True,,Q-INHERIT,,,FIXTURE: values in S1_table,0,0,0,,"legacy, 신규 clean 코호트와 비교 불가",,,,,,,,,,,,,,,SYNTHETIC
+Q-Z3,H-023,H,A-VERDICT,A-VERDICT,A-VERDICT,fixture,True,,Q-INHERIT,,,none: H row (status word only),0,0,0,,,4,partial,,FIXTURE/synthetic.md,line 1,card-level (synthetic fixture component note),,,,,,,,,SYNTHETIC
+Q-Z4,EXP-006,E,A-DESC,A-DESC,A-DESC,fixture,True,,Q-DESC-ONLY,,,FIXTURE: values in S1_table,0,0,0,,"legacy, 신규 clean 코호트와 비교 불가",,,,,,,,,,,,,,,SYNTHETIC
+Q-Z4,H-026,H,A-DESC,A-DESC,A-DESC,fixture,True,,Q-DESC-ONLY,,,none: H row (status word only),0,0,0,,,4,,under-test,FIXTURE/synthetic.md,line 1,,,,,,,,,,SYNTHETIC
+Q-Z5,EXP-017,E,D-LOCKED,D-LOCKED,D-LOCKED,fixture,True,,Q-INHERIT,,,FIXTURE: values in S1_table,0,0,0,,,,,,,,,,재진술 문자열 S0 미기록 — 재진술 없음,,현황 기술(확증 아님),,,,,SYNTHETIC
+Q-Z5,FG-0003,A,A-VERDICT,A-VERDICT,A-VERDICT,fixture,True,,Q-INHERIT,,,none: atom verdict token only (no metric value),0,0,0,,,1,supported,,FIXTURE/synthetic.md,line 1,,,,,,,FIXTURE,FIXTURE scope text (synthetic),FIXTURE prohibited text (synthetic),SYNTHETIC
+Q-Z5,FG-0004,A,A-VERDICT,A-VERDICT,A-VERDICT,fixture,True,,Q-INHERIT,,,none: atom verdict token only (no metric value),0,0,0,,,1,supported,,FIXTURE/synthetic.md,line 1,,,,,,,FIXTURE,FIXTURE scope text (synthetic),FIXTURE prohibited text (synthetic),SYNTHETIC
+Q-Z5,FG-0005,A,A-VERDICT,A-VERDICT,A-VERDICT,fixture,True,,Q-INHERIT,,,none: atom verdict token only (no metric value),0,0,0,,,1,supported,,FIXTURE/synthetic.md,line 1,,,,,,,FIXTURE,FIXTURE scope text (synthetic),FIXTURE prohibited text (synthetic),SYNTHETIC
+Q-Z5,H-201,H,D-LOCKED,D-LOCKED,D-LOCKED,fixture,True,,Q-INHERIT,,,none: H row (status word only),0,0,0,,,2,partial,,FIXTURE/synthetic.md,line 1,,,,FIXTURE status line (synthetic),현황 기술(확증 아님),,,,,SYNTHETIC
+Q-Z6,EXP-018,E,X-ABSENT,X-ABSENT,X-ABSENT,fixture,True,,Q-DESC-ONLY,,,none: class X-ABSENT,0,0,0,,,,,,,,,,,,,,,,,SYNTHETIC
+Q-Z6,EXP-020,E,D-PREJUDGE,D-PREJUDGE,D-PREJUDGE,fixture,True,,Q-DESC-ONLY,,,none: D-PREJUDGE (O-2: status/run count only; synthetic fixture),0,0,0,,,,,,,,,,,,,,,,,SYNTHETIC
+Q-Z6,H-202,H,X-ABSENT,X-ABSENT,X-ABSENT,fixture,True,,Q-DESC-ONLY,,,none: class X-ABSENT,0,0,0,,,,,,,,,,,,,,,,,SYNTHETIC
+Q-Z6,H-200,H,D-LOCKED,D-LOCKED,D-LOCKED,fixture,True,,Q-DESC-ONLY,,,none: H row (status word only),0,0,0,,,2,partial,,FIXTURE/synthetic.md,line 1,,,,FIXTURE status line (synthetic),현황 기술(확증 아님),,,,,SYNTHETIC
+Q-Z7,CL-0006,A,LISTED-ONLY,LISTED-ONLY,LISTED-ONLY,fixture,True,,Q-LISTED,,,none: LISTED-ONLY (Q-S1 table only: verdict word + verdict_scope verbatim),0,0,0,,,1,partial,,FIXTURE/synthetic.md,line 1,,,,,,,FIXTURE,FIXTURE scope text (synthetic),,SYNTHETIC
