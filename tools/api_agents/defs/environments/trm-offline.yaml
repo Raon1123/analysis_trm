@@ -1,0 +1,11 @@
+# Cloud container with no outbound network: the agents read only what is mounted into the session.
+key: trm-offline
+name: trm-offline
+description: TRM research-support sandbox. Limited networking, no allowed hosts, no package managers, no MCP.
+config:
+  type: cloud
+  networking:
+    type: limited
+    allow_package_managers: false
+    allow_mcp_servers: false
+    allowed_hosts: []
