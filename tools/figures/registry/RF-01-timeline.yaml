@@ -1,0 +1,11 @@
+id: RF-01-timeline
+module: tools.figures.figs.timeline
+title: Timeline of the numbered experiments with dated milestones
+langs: [en, ko]
+print_width_in: 6.7
+inputs:
+  - {role: file, path: /mnt/ayp/agents/trm/23_reports/11_lab-reports/2026-11-10_reader-first-rewrite/70_pilot/12_claims/timeline/TIMELINE.json}
+  - {role: file, path: /mnt/ayp/agents/trm/23_reports/11_lab-reports/2026-11-10_reader-first-rewrite/70_pilot/12_claims/claims_a/NAMES.csv}
+protocol: {}
+cohorts: []
+report_refs: []

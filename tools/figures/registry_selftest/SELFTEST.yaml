@@ -1,0 +1,9 @@
+id: SELFTEST
+module: tools.figures.figs._selftest_fig
+title: Self-test figure (tests only)
+langs: [en, ko]
+print_width_in: 5.5
+inputs: []
+protocol: {}
+cohorts: []
+report_refs: []

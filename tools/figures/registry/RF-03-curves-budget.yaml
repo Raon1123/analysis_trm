@@ -1,0 +1,13 @@
+id: RF-03-curves-budget
+module: tools.figures.figs.curves_budget
+title: Twice-the-steps trainings against their same-named once-the-steps trainings
+langs: [en, ko]
+print_width_in: 6.7
+inputs:
+  - {role: cache, family: legacy_1x, file: legacy_1x.eval.csv}
+  - {role: cache, family: clean_1x, file: clean_1x.eval.csv}
+  - {role: cache, family: ext_2x, file: ext_2x.eval.csv}
+  - {role: file, path: /mnt/ayp/agents/trm/23_reports/11_lab-reports/2026-11-10_reader-first-rewrite/70_pilot/12_claims/claims_a/NAMES.csv}
+protocol: {metric_test: probe/test_exact, metric_train: probe/train_exact}
+cohorts: [legacy, clean_d0]
+report_refs: []

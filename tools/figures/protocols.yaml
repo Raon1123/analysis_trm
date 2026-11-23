@@ -1,0 +1,63 @@
+# Metric protocols for the curve cache (task P01 of the reader-first pilot, 2026-11-10).
+# Evidence: lab 23_reports/11_lab-reports/2026-11-10_reader-first-rewrite/70_pilot/15_data/PROTOCOL.md
+# and PROTOCOL_EVIDENCE.csv in the same directory.
+# status: settled = eval set and weights both settled for every data generation in the pilot;
+#         unsettled = at least one of them is not.
+# Rule: figures plot probe/test_exact and probe/train_exact only. all/exact_accuracy stays in
+# the cache and is not plotted or named in a caption unless its status is settled.
+version: 1
+metrics:
+  probe/test_exact:
+    eval_set: test split, first 512 examples (z-logger probe)
+    n_examples: 512
+    weights: "EMA copy when config ema=True (pretrain.py:859-862, z_logger.log(model=train_state_eval.model) at :883-884); every pilot run has ema=True"
+    cadence: "every evaluation (about every 4,882 optimizer steps; 50 per 244,100 steps, 100 per 488,200, 38 per 185,516)"
+    status: unsettled
+    evidence: "eval set settled: utils/z_logging.py:155-159 slices [:probe_size], z_probe_size=512 (pretrain.py:112, all_config.yaml); 88/88 values x512 integral (residual 0.0). Weights settled by code for runs started after commit e1d92cf (2026-07-18 06:22:46 UTC), which first committed the z-logger call on train_state_eval.model. Runs started before it ran uncommitted z-logger code; in the pilot these are all 19 legacy-cohort primaries (15 legacy_1x from June, and the 4 finished July ext_2x runs 1nketqr9, c2hetjdr, x6od7l3j, i706pdya, started 2026-07-17 09:15 to 2026-07-18 01:51 UTC). Their probe weights rest on indirect evidence only (PROTOCOL.md section 3). Unsettled only for the legacy cohort and only on weights."
+    plain_en: "test exact-match on the first 512 test examples, evaluated with the averaged (EMA) weights"
+    plain_ko: "시험 정확도(시험 예제 앞 512개, 평균 가중치로 평가)"
+  probe/train_exact:
+    eval_set: train split, first 512 examples (z-logger probe)
+    n_examples: 512
+    weights: "EMA copy when config ema=True (same model object as probe/test_exact)"
+    cadence: "every evaluation (same steps as probe/test_exact)"
+    status: unsettled
+    evidence: "utils/z_logging.py:155-159 (first probe_size examples of the split); same weights caveat as probe/test_exact for the 19 legacy-cohort primaries started before commit e1d92cf (2026-07-18 06:22:46 UTC)."
+    plain_en: "training exact-match on the first 512 training examples, evaluated with the averaged (EMA) weights"
+    plain_ko: "훈련 정확도(훈련 예제 앞 512개, 평균 가중치로 평가)"
+  all/exact_accuracy:
+    eval_set: whole test split (one pass over every test example)
+    n_examples: 1000
+    weights: "EMA copy when config ema=True (pretrain.py:859-862, then evaluate(train_state_eval) at :867-874; the run logs print SWITCH TO EMA before every evaluation)"
+    cadence: "every evaluation (same steps as the probe metrics)"
+    status: unsettled
+    evidence: "N=500 refuted: 58 of 88 evaluations integral at x1000 but not at x500; 88/88 integral at x1000 (max residual 9.2e-07); smallest N in 100..5000 making every evaluation integral = 1000 for both sampled runs; current test splits hold 1000 examples. Weights for all/* settled as EMA (code at commit 9c7c83a before the June run, plus SWITCH TO EMA printed 50/50 and 38/38 times in the run logs). Status stays unsettled because the weights verdict as a whole is PARTLY-SETTLED (probe weights of the legacy runs started before 2026-07-18 06:22:46 UTC), and the plotting rule requires both verdicts SETTLED."
+    plain_en: "test exact-match on the whole test split (1,000 examples), evaluated with the averaged (EMA) weights"
+    plain_ko: "시험 정확도(시험 분할 전체 1,000개, 평균 가중치로 평가)"
+  phase/index:
+    eval_set: z-logger probe (first 512 examples)
+    n_examples: 512
+    weights: "EMA copy when config ema=True (same model object as the probe metrics)"
+    cadence: "every evaluation (same steps as the probe metrics)"
+    status: unsettled
+    evidence: "logged by ZDynamicsLogger.log on train_state_eval.model (pretrain.py:880-888); not plotted in the pilot."
+    plain_en: "phase index of the latent dynamics on the probe examples, averaged (EMA) weights"
+    plain_ko: "잠재 동역학 국면 지표(탐침 예제, 평균 가중치)"
+  train/exact_accuracy:
+    eval_set: current training batch (global_batch_size 2048)
+    n_examples: 2048
+    weights: "online (raw) weights, before the EMA update of that step (pretrain.py:844-852)"
+    cadence: "every optimizer step; the cache keeps steps that are multiples of train_stride plus the last step"
+    status: settled
+    evidence: "wandb.log(metrics, step=train_state.step) right after train_batch (pretrain.py:844-848); the EMA update follows at :850-852."
+    plain_en: "exact-match on the current training batch, raw (online) weights"
+    plain_ko: "현재 훈련 배치 정확도(온라인 가중치)"
+  train/lm_loss:
+    eval_set: current training batch (global_batch_size 2048)
+    n_examples: 2048
+    weights: "online (raw) weights (pretrain.py:844-852)"
+    cadence: "every optimizer step; the cache keeps steps that are multiples of train_stride plus the last step"
+    status: settled
+    evidence: "same logging site as train/exact_accuracy (pretrain.py:844-848)."
+    plain_en: "training loss on the current training batch, raw (online) weights"
+    plain_ko: "현재 훈련 배치 손실(온라인 가중치)"

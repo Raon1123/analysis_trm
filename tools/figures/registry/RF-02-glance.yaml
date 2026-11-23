@@ -1,0 +1,12 @@
+id: RF-02-glance
+module: tools.figures.figs.glance
+title: At-a-glance grid of the changes tested and how each is scored today
+langs: [en, ko]
+print_width_in: 6.7
+inputs:
+  - {role: file, path: /mnt/ayp/agents/trm/23_reports/11_lab-reports/2026-11-10_reader-first-rewrite/70_pilot/12_claims/claims_a/GLANCE.csv}
+  - {role: file, path: /mnt/ayp/agents/trm/23_reports/11_lab-reports/2026-11-10_reader-first-rewrite/70_pilot/12_claims/claims_a/GLOSS.csv}
+  - {role: file, path: /mnt/ayp/agents/trm/23_reports/11_lab-reports/2026-11-10_reader-first-rewrite/70_pilot/12_claims/claims_a/NAMES.csv}
+protocol: {}
+cohorts: []
+report_refs: []

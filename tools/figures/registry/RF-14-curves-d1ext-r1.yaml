@@ -1,0 +1,11 @@
+id: RF-14-curves-d1ext-r1
+module: tools.figures.figs.curves_d1ext_r1
+title: Second-generation-data trainings with and without the halting device, r1 Korean wording
+langs: [ko]
+print_width_in: 6.3
+inputs:
+  - {role: cache, family: d1_ext, file: d1_ext.eval.csv}
+  - {role: file, path: /mnt/ayp/agents/trm/23_reports/11_lab-reports/2026-11-10_reader-first-rewrite/75_iter/r1/data/names/NAMES.csv}
+protocol: {metric_test: probe/test_exact, metric_train: probe/train_exact}
+cohorts: [d1]
+report_refs: []

@@ -1,0 +1,39 @@
+# Run families of the reader-first pilot (task P01, 2026-11-10).
+# Selection: project equals `project` AND run name fully matches `regex`.
+# Cohort rule (first matching prefix wins; "under" = equal to the prefix or below it):
+#   data/power_permutation/d1 -> d1
+#   data/sigma_k_10           -> legacy if startedAt < rebuild_cutoff_utc else clean_d0
+#   anything else             -> other
+rebuild_cutoff_utc: "2026-07-20T13:18:00Z"
+cohort_rule:
+  - prefix: data/power_permutation/d1
+    cohort: d1
+  - prefix: data/sigma_k_10
+    before_cutoff: legacy
+    after_cutoff: clean_d0
+  - default: other
+eval_metrics: [probe/test_exact, probe/train_exact, all/exact_accuracy, phase/index]
+required_eval_metrics: [probe/test_exact, probe/train_exact]
+train_metrics: [train/exact_accuracy, train/lm_loss]
+train_stride: 1000
+families:
+  - id: legacy_1x
+    project: Sigma_k_fig12
+    regex: '^fig1_tf_(noz_iter_k(2|5|7)|z_iter_k(4|5))_s[123]$'
+    expected_names: 15
+    expected_last_step: 244100
+  - id: clean_1x
+    project: Sigma_k_new
+    regex: '^fig1_tf_(noz_iter_k(5|7)|z_iter_k(4|5))_s1$'
+    expected_names: 4
+    expected_last_step: 244100
+  - id: ext_2x
+    project: Sigma_k_fig12
+    regex: '^fig1x2_tf_(noz|z)_iter_k\d+_s\d+$'
+    expected_names: 9
+    expected_last_step: 488200
+  - id: d1_ext
+    project: power_permutation
+    regex: '^e020_(fig1_tf_noz_iter|act_noz_iter_h16)_ep76k_k[567]_s[123]$'
+    expected_names: 18
+    expected_last_step: 185516

@@ -1,0 +1,12 @@
+id: RF-11-timeline-reader-r3b
+module: tools.figures.figs.timeline_reader
+title: Reader timeline, r3b (bars from run records; 21 experiments plus 3 re-run rows in six phases; Korean)
+langs: [ko]
+print_width_in: 6.3
+inputs:
+  - {role: file, path: /mnt/ayp/agents/trm/23_reports/11_lab-reports/2026-11-10_reader-first-rewrite/75_iter/r3b/data/READER_TIMELINE_ko.csv}
+  - {role: file, path: /mnt/ayp/agents/trm/23_reports/11_lab-reports/2026-11-10_reader-first-rewrite/75_iter/r3b/data/PHASES_ko.csv}
+  - {role: file, path: /mnt/ayp/agents/trm/23_reports/11_lab-reports/2026-11-10_reader-first-rewrite/75_iter/r3b/data/FIGLABELS_ko.csv}
+protocol: {}
+cohorts: []
+report_refs: []
