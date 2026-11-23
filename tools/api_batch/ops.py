@@ -14,7 +14,7 @@ from pathlib import Path
 from . import manifest as M
 from . import normalize as N
 from . import prices
-from .common import (FROZEN_DOC_LINT, PKG_DIR, REPO_ROOT, Halt, canon_json, est_tokens, in_claude_code_session,
+from .common import (FROZEN_DOC_LINT, canon_batch_dir, PKG_DIR, REPO_ROOT, Halt, canon_json, est_tokens, in_claude_code_session,
                      sha256_bytes, sha256_file, sha256_text, trm_mcp_module_files)
 from .ledger import LIMIT_BATCH_USD, LIMIT_DAY_USD, LIMIT_MONTH_USD, Ledger, approval_id, now
 from .pack import PackBuilder, image_tokens_b64
@@ -33,8 +33,36 @@ def _pack_py_sha() -> str:
 
 
 # ------------------------------------------------------------------------------------- plan
+def _replan_guard(bd: Path, ledger: Ledger) -> None:
+    """plan overwrites manifest.jsonl / plan.json / pack/ of the batch dir, so it must not run while the dir's batch is in
+    flight (a `submitted` row with no later `collected` / `canceled`), nor once the dir holds collected raw/ results: the
+    as-sent record would be replaced by one the batch was never given (incident 2026-11-10, run-cards-pilot). Re-plan into
+    a NEW dir instead. The dir is compared as a canonical physical path (cwd-relative argument vs ledger form)."""
+    here = Path(bd).resolve()                                   # argument: relative to the caller's cwd
+    last_sub = last_end = -1
+    for i, r in enumerate(ledger.rows()):
+        try:
+            same = bool(r.get("batch_dir")) and canon_batch_dir(r["batch_dir"]) == here
+        except (OSError, ValueError):
+            same = False
+        if not same:
+            continue
+        if r["event"] == "submitted":
+            last_sub = i
+        elif r["event"] in ("collected", "canceled"):
+            last_end = i
+    if last_sub > last_end:
+        raise Halt(f"plan refused: {bd} has a submitted batch that is not yet collected/canceled; re-planning would replace the "
+                   "as-sent manifest/plan/pack. Wait for collect, or plan into a new directory.")
+    raw = Path(bd) / "raw"
+    if raw.is_dir() and any(raw.iterdir()):
+        raise Halt(f"plan refused: {bd} already holds collected raw/ results; plan into a new directory so the as-sent record "
+                   "of the collected batch is kept.")
+
+
 def plan(batch_dir: Path, builder: PackBuilder, ledger: Ledger) -> dict:
     bd = Path(batch_dir)
+    _replan_guard(bd, ledger)
     spec_path = bd / "spec.yaml"
     spec = load_spec(spec_path)
     builder.batch_dir = bd
@@ -45,6 +73,8 @@ def plan(batch_dir: Path, builder: PackBuilder, ledger: Ledger) -> dict:
     lint_inputs = None
     u1_info = None
     figqa_info = None
+    runcard_info = None
+    docaudit_info = None
     scanned.append(builder.build_verify_only("spec_text", "spec.yaml", spec_path.read_text(encoding="utf-8"), origin=spec_path))
 
     def schema_of(name):
@@ -147,6 +177,12 @@ def plan(batch_dir: Path, builder: PackBuilder, ledger: Ledger) -> dict:
         figqa_info = _plan_figqa(spec, bd, builder, scanned, reqs, schema_of)
     elif spec["use"] in ("SIZ-map", "SIZ-reduce"):
         u1_info = _plan_siz(spec, bd, builder, scanned, reqs, schema_of)
+    elif spec["use"] == "runcard":
+        from . import runcard
+        runcard_info = runcard.plan_runcard(spec, bd, builder, scanned, reqs, schema_of)
+    elif spec["use"] == "docaudit":
+        from . import docaudit
+        docaudit_info = docaudit.plan_docaudit(spec, bd, builder, scanned, reqs, schema_of)
     else:
         tpl = REPO_ROOT / spec["prompt"]["system_template"]
         system = builder.build_verify_only("spec_text", "system", tpl.read_text(encoding="utf-8"), origin=tpl)
@@ -210,6 +246,10 @@ def plan(batch_dir: Path, builder: PackBuilder, ledger: Ledger) -> dict:
         plan_d["lint_inputs"] = lint_inputs
     if figqa_info:
         plan_d["figqa"] = figqa_info
+    if runcard_info:
+        plan_d["runcard"] = runcard_info
+    if docaudit_info:
+        plan_d["docaudit"] = docaudit_info
     if u1_info:
         plan_d["siz" if spec["use"].startswith("SIZ-") else "u1"] = u1_info
     allowed = [{"path": p.sources[0]["path"], "allowed_by": p.report["allowed_by"], "allowed_hits": p.report["allowed_hits"]}

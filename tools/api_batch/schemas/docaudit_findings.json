@@ -1,0 +1,40 @@
+{
+  "type": "object",
+  "properties": {
+    "files_read": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "file": {"type": "string"},
+          "last_line_read": {"type": "integer"}
+        },
+        "required": ["file", "last_line_read"],
+        "additionalProperties": false
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "file": {"type": "string"},
+          "quote": {"type": "string"},
+          "category": {"type": "string", "enum": ["wrong", "inconsistent", "inefficient", "obsolete"]},
+          "basis": {"type": "string", "enum": ["internal", "needs-check"]},
+          "severity": {"type": "string", "enum": ["high", "medium", "low"]},
+          "frozen": {"type": "boolean"},
+          "claim": {"type": "string"},
+          "counter_file": {"type": "string"},
+          "counter_quote": {"type": "string"},
+          "check": {"type": "string"}
+        },
+        "required": ["file", "quote", "category", "basis", "severity", "frozen", "claim", "counter_file", "counter_quote", "check"],
+        "additionalProperties": false
+      }
+    },
+    "notes": {"type": "string"}
+  },
+  "required": ["files_read", "findings", "notes"],
+  "additionalProperties": false
+}

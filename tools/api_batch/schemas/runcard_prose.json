@@ -1,0 +1,38 @@
+{
+  "type": "object",
+  "properties": {
+    "run_id": {"type": "string"},
+    "what_this_run_is": {"type": "string"},
+    "attribution": {"type": "string"},
+    "numbers_summary": {"type": "string"},
+    "what_the_numbers_show": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "key": {"type": "string"},
+          "stat": {"type": "string", "enum": ["first", "last", "min", "max"]},
+          "value": {"type": "string"},
+          "step": {"type": "string"}
+        },
+        "required": ["key", "stat", "value", "step"],
+        "additionalProperties": false
+      }
+    },
+    "caveats": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "kind": {"type": "string", "enum": ["status", "no_metadata", "truncated_history", "snapshot", "multi_attribution", "legacy_cohort", "duplicate_run_name", "link_tier", "other"]},
+          "text": {"type": "string"}
+        },
+        "required": ["kind", "text"],
+        "additionalProperties": false
+      }
+    },
+    "see_also": {"type": "array", "items": {"type": "string"}}
+  },
+  "required": ["run_id", "what_this_run_is", "attribution", "numbers_summary", "what_the_numbers_show", "caveats", "see_also"],
+  "additionalProperties": false
+}

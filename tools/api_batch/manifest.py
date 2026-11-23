@@ -17,7 +17,7 @@ from .pack import Pack
 
 CUSTOM_ID_RE = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
 USES = {"U0": "u0", "U1": "u1m", "U1-reduce": "u1r", "U2": "u2", "U3": "u3", "seat-doclint": "lint", "seat-figqa": "figqa",
-        "triage": "tri", "probe": "probe", "SIZ-map": "sizm", "SIZ-reduce": "sizr"}
+        "triage": "tri", "probe": "probe", "SIZ-map": "sizm", "SIZ-reduce": "sizr", "runcard": "rcard", "docaudit": "daud"}
 ALLOWED_TOP = {"model", "max_tokens", "system", "messages", "thinking", "output_config", "fallbacks"}
 FORBIDDEN_TOP = {"stream", "speed"}     # F4 (fallbacks is allowed only so the P0b probe can send it)
 

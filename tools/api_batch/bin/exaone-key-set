@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# exaone-key-set — store an LG AI Research EXAONE API key for the exaone lane
+# (tools/api_batch exaone probe|run). Modelled on ~/.local/bin/anthropic-key-set.
+#
+#   tools/api_batch/bin/exaone-key-set      # read silently from the terminal
+#
+# The key is never a command-line argument (argv shows up in `ps` and in
+# logs/command_audit.jsonl) and is never echoed. Refuses inside a Claude Code
+# session (everything there lands in the transcript) and when stdin is not a TTY.
+# Writes ${EXAONE_API_ENV_DIR:-$HOME/.config/exaone-api}/env (dir 700, file 600)
+# and an `issued` date file: EXAONE keys expire 30 days after issue.
+set -euo pipefail
+umask 077
+
+DIR=${EXAONE_API_ENV_DIR:-$HOME/.config/exaone-api}
+FILE=$DIR/env
+
+if [[ -n ${CLAUDECODE:-} || -n ${CLAUDE_CODE_SESSION_ID:-} ]]; then
+  echo "refuse: Claude Code 세션 안에서 실행됨 — 별도 SSH 터미널에서 실행하라" >&2
+  exit 2
+fi
+case ${1:-} in
+  "") ;;
+  -h|--help) sed -n '2,11p' "$0"; exit 0 ;;
+  *) echo "usage: exaone-key-set   (key는 인자로 받지 않는다)" >&2; exit 2 ;;
+esac
+[[ -t 0 ]] || { echo "refuse: stdin이 터미널이 아님 — 직접 터미널에서 실행하라" >&2; exit 2; }
+
+KEY=
+IFS= read -rsp 'EXAONE API key (화면에 표시되지 않음): ' KEY || true
+echo >&2
+KEY=${KEY//[[:space:]]/}
+if [[ -z $KEY || ${#KEY} -lt 16 ]]; then
+  echo "refuse: key가 비었거나 너무 짧음 (길이 ${#KEY}) — 저장하지 않았다" >&2; exit 2
+fi
+if [[ $KEY =~ [[:cntrl:]] ]]; then
+  echo "refuse: key에 제어 문자가 있음 — 저장하지 않았다" >&2; exit 2
+fi
+# key format is undocumented: no charset rule beyond this; %q below keeps the env file safe to source.
+
+ISSUED=
+read -rp "발급일 YYYY-MM-DD (엔터 = 오늘 $(date +%F)): " ISSUED || true
+ISSUED=${ISSUED:-$(date +%F)}
+if [[ ! $ISSUED =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || ! date -d "$ISSUED" +%s >/dev/null 2>&1; then
+  echo "refuse: 발급일 형식이 아님 ($ISSUED)" >&2; exit 2
+fi
+
+install -d -m 700 "$DIR"
+TMP=$(mktemp "$DIR/.env.XXXXXX")
+trap 'rm -f "$TMP"' EXIT
+# printf is a bash builtin: the key never appears in another process's argv.
+printf '# written by exaone-key-set %s\nEXAONE_API_KEY=%q\n' "$(date -u +%FT%TZ)" "$KEY" >"$TMP"
+chmod 600 "$TMP"
+mv -f "$TMP" "$FILE"
+trap - EXIT
+unset KEY
+printf '%s\n' "$ISSUED" >"$DIR/issued"
+chmod 600 "$DIR/issued"
+echo "saved: $FILE (600), issued $ISSUED (만료 예정 $(date -d "$ISSUED +30 days" +%F))"

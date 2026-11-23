@@ -106,3 +106,11 @@ def load_trm_mcp():
 
 def trm_mcp_module_files() -> list[Path]:
     return [TRM_MCP_SRC / "trm_mcp" / "withheld.py", TRM_MCP_SRC / "trm_mcp" / "research_digest.py"]
+
+
+def canon_batch_dir(p) -> Path:
+    """Canonical physical path of a batch directory, for comparing a `batch_dir` typed now (relative to the caller's cwd) with
+    one recorded in the ledger (as typed then; a relative form is read relative to the repo root, where the CLI is run).
+    Symlinks (lab/ -> NAS) are resolved on both sides."""
+    q = Path(p)
+    return (q if q.is_absolute() else REPO_ROOT / q).resolve()

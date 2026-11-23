@@ -49,6 +49,10 @@ def validate_spec(spec) -> dict:
     elif spec.get("use") == "SIZ-reduce":
         need = ["name", "use", "model", "effort", "max_tokens", "cache_ttl", "header", "prompt", "output_schema", "packets",
                 "group_by", "digest", "exclude_q_tokens", "map_batches", "data", "templates_hashes", "budget"]
+    elif spec.get("use") == "runcard":
+        need = ["name", "use", "model", "effort", "max_tokens", "cache_ttl", "header", "prompt", "output_schema", "cards", "budget"]
+    elif spec.get("use") == "docaudit":
+        need = ["name", "use", "models", "effort", "max_tokens", "cache_ttl", "header", "prompt", "output_schema", "files", "budget"]
     else:
         need = ["name", "use", "model", "effort", "max_tokens", "cache_ttl", "context_pack", "prompt", "budget"]
     for k in need:
@@ -99,6 +103,11 @@ def validate_spec(spec) -> dict:
         return spec
     if spec["use"] in ("SIZ-map", "SIZ-reduce"):
         return _validate_siz(spec)
+    if spec["use"] == "runcard":
+        return _validate_runcard(spec)
+    if spec["use"] == "docaudit":
+        from .docaudit import validate as _validate_docaudit
+        return _validate_docaudit(spec)
     _check_req(spec)
     cp = spec["context_pack"]
     if not isinstance(cp, dict) or not isinstance(cp.get("sources"), list) or not cp["sources"]:
@@ -151,6 +160,39 @@ def _validate_figqa(spec: dict) -> dict:
             raise SpecError(f"figure png must be batch-relative user/<name>.png, got {f['png']!r}")
         if not f["caption"].endswith(".md") or f["caption"].startswith("/") or ".." in f["caption"].split("/"):
             raise SpecError("figure caption must be a lab-relative .md path")
+    return spec
+
+
+def _validate_runcard(spec: dict) -> dict:
+    """runcard (wandb run-card prose, Stage B): one request per card; the card set is enumerated at plan time from
+    cards.root + cards.cohorts (re-plan = plan again)."""
+    from .runcard import COHORTS
+    _check_req(spec)
+    if not isinstance(spec["header"], str) or not re.fullmatch(r"shared/[^/]+\.md", spec["header"]):
+        raise SpecError("runcard header must be a batch-relative shared/<file>.md")
+    pr = spec["prompt"]
+    if not isinstance(pr, dict) or set(pr) != {"system_template"} \
+            or not re.fullmatch(r"tools/api_batch/prompts/[^/]+\.md", str(pr["system_template"])):
+        raise SpecError("runcard prompt must be exactly {system_template: tools/api_batch/prompts/<file>.md}")
+    if not isinstance(spec["output_schema"], str) or not spec["output_schema"] or "/" in spec["output_schema"]:
+        raise SpecError("runcard output_schema must be a name under tools/api_batch/schemas/")
+    c = spec["cards"]
+    if not isinstance(c, dict) or "root" not in c or not isinstance(c["root"], str) or not c["root"] \
+            or not set(c) <= {"root", "cohorts", "ids_file", "include_injected"}:
+        raise SpecError("runcard cards must be {root: <lab-relative dir>, cohorts?: [...], ids_file?: shared-or-batch-relative path, "
+                        "include_injected?: bool}")
+    if "cohorts" not in c and "ids_file" not in c:
+        raise SpecError("runcard cards needs cohorts and/or ids_file")
+    if "cohorts" in c and (not isinstance(c["cohorts"], list) or not c["cohorts"] or not all(x in COHORTS for x in c["cohorts"])
+                           or len(set(c["cohorts"])) != len(c["cohorts"])):
+        raise SpecError(f"runcard cards.cohorts must be a non-empty list of distinct values from {list(COHORTS)}")
+    f = c.get("ids_file")
+    if f is not None and (not isinstance(f, str) or not re.fullmatch(r"[A-Za-z0-9_.\-]+(?:/[A-Za-z0-9_.\-]+)*", f) or ".." in f.split("/")):
+        raise SpecError("runcard cards.ids_file must be a relative path inside the batch directory")
+    if "include_injected" in c and not isinstance(c["include_injected"], bool):
+        raise SpecError("runcard cards.include_injected must be a boolean")
+    if spec["cache_ttl"] == "none":
+        raise SpecError("runcard needs a cached shared header: cache_ttl 5m | 1h")
     return spec
 
 

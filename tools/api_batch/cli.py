@@ -6,7 +6,10 @@
 
 Offline commands (no network, no key): new, plan, approve, scan, selftest, collect --offline, cache-audit.
 Metered commands (RealClient; run under `with-anthropic-key ...`): submit, status, collect, cancel,
-probe-sync, draft-sync run. TypeSafe (run under a shell with TYPESAFE_API_KEY): jev run. `doclint-sync` hands the send to the frozen doc_lint.py. `draft-sync plan` and `jev plan` are offline.
+probe-sync, draft-sync run. TypeSafe (run under a shell with TYPESAFE_API_KEY): jev run. LG AI Research (run under
+tools/api_batch/bin/with-exaone-key): exaone run, exaone probe. `doclint-sync` hands the send to the frozen doc_lint.py.
+`draft-sync plan`, `jev plan` and `exaone plan` are offline. An exaone plan is approved in tokens
+(`approve <plan_dir> --tokens N`; no price is published), after reading its SEND_LIST.md.
 
 `approve` is USER-ONLY. It refuses inside a Claude Code session. Marker (checked in this order, first
 non-empty wins): CLAUDECODE, CLAUDE_CODE_SESSION_ID -- the same pair ~/.local/bin/anthropic-key-set:20 uses.
@@ -18,10 +21,11 @@ the variable or editing the ledger (the stage verifier cross-checks `approved` r
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
-from . import draft, jev, ops
+from . import draft, exaone, jev, ops
 from .common import (DEFAULT_BATCH_ROOT, LAB_ROOT, REPO_ROOT, Halt, check_tools_path, in_claude_code_session)
 from .deny import default_deny_files
 from .ledger import Ledger
@@ -74,7 +78,8 @@ def build_parser() -> argparse.ArgumentParser:
             p.add_argument("--ids", nargs="*")
     p = sp.add_parser("collect"); p.add_argument("batch_dir", type=Path)
     p.add_argument("--offline", action="store_true"); p.add_argument("--keep-server-copy", action="store_true")
-    p = sp.add_parser("approve"); p.add_argument("batch_dir", type=Path, nargs="?"); p.add_argument("--usd", type=float, required=True)
+    p = sp.add_parser("approve"); p.add_argument("batch_dir", type=Path, nargs="?"); p.add_argument("--usd", type=float, default=None)
+    p.add_argument("--tokens", type=int, default=None, help="exaone plans only: token approval (price unpublished)")
     p.add_argument("--sync-plan-hash"); p.add_argument("--sync-worst", type=float)
     p.add_argument("--for-probe-sync", action="store_true", help="record 2x hard-worst (standard price)")
     p = sp.add_parser("scan"); p.add_argument("--verify-only", action="store_true", required=True)
@@ -87,6 +92,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("action", choices=("plan", "run")); p.add_argument("target", type=Path)
     p = sp.add_parser("jev", help="TypeSafe Jev typed judgments: plan <spec> (offline) | run <plan_dir> (metered, third party)")
     p.add_argument("action", choices=("plan", "run")); p.add_argument("target", type=Path)
+    p = sp.add_parser("exaone", help="K-EXAONE advisory reading: plan <spec> (offline) | show <plan_dir> (offline, "
+                       "read-only) | run <plan_dir> (third party) | probe")
+    p.add_argument("action", choices=("plan", "show", "run", "probe")); p.add_argument("target", type=Path, nargs="?")
+    p.add_argument("--try-response-format", action="store_true", help="probe only: add the undocumented response_format")
+    p.add_argument("--out", type=Path, default=None, help="probe only: where to save the response shape")
     sp.add_parser("selftest")
     p = sp.add_parser("cache-audit", help="offline prompt-cache audit of manifests (and collected usage, if present)")
     p.add_argument("paths", nargs="+", type=Path); p.add_argument("--json", action="store_true")
@@ -105,6 +115,22 @@ def main(argv=None, client=None, runner=None) -> int:
     ledger = Ledger(a.ledger or (a.batch_root / "ledger.jsonl"))
     try:
         if a.cmd == "approve":
+            if a.batch_dir and not a.sync_plan_hash and not in_claude_code_session() and exaone.is_exaone_plan(a.batch_dir):
+                if a.usd is not None or a.for_probe_sync:
+                    raise Halt("an exaone plan is approved in tokens (price unpublished): use --tokens N, not --usd")
+                r = exaone.approve(a.batch_dir, a.tokens, ledger, builder=_builder(a, a.batch_dir))   # re-reads listed files
+                print(f"approved {r['approval']['tokens']} tokens (price unpublished)\n"
+                      f"SEND_LIST.md sha256 {r['send_list_sha256']}  plan_hash {r['manifest_sha256'][:12]}  "
+                      "(must equal what `exaone show` printed)")
+                print("listed files re-checked on disk (raw sha256 = `sha256sum <path>`; compare with `exaone show`):")
+                for f in r["files"]:
+                    print(f"  {f['raw_sha256']}  {f['path']}")
+                return 0
+            if a.tokens is not None and not in_claude_code_session():
+                raise Halt(f"--tokens: {a.batch_dir} is not an exaone plan (no readable plan.json with use: exaone there; "
+                           f"check the path, batch dirs live under {DEFAULT_BATCH_ROOT}/11_batches/). Other lanes take --usd.")
+            if a.usd is None and not in_claude_code_session():
+                raise Halt("approve needs --usd X (or --tokens N for an exaone plan)")
             sp = None
             if a.sync_plan_hash:
                 if a.sync_worst is None:         # NB-3: a missing worst would record 0 and skip the limit check
@@ -167,6 +193,53 @@ def main(argv=None, client=None, runner=None) -> int:
                 print(f"jev: nothing to do -- every request of {a.target} is already done (no approval used)")
                 return 0                      # before RealJevClient(): no SDK import, no key, no ledger row
             r = jev.run(a.target, ledger, client or jev.RealJevClient(), _builder(a, a.target))
+            print(r)
+            return 0 if r["halted"] is None and all(x["rc"] == 0 for x in r["requests"]) else 5
+        elif a.cmd == "exaone" and a.action == "probe":
+            marker = in_claude_code_session()
+            if marker:                        # before constructing the client: only the user triggers a live call
+                raise Halt(f"exaone probe refused: running inside a Claude Code session ({marker} is set)")
+            out = a.out or (a.batch_root / "13_exaone-probe" / f"probe-{__import__('time').strftime('%Y%m%dT%H%M%SZ', __import__('time').gmtime())}.json")
+            s = exaone.probe(ledger, client or exaone.RealExaoneClient(), out, try_response_format=a.try_response_format)
+            print(__import__("json").dumps(s, ensure_ascii=False, indent=1, sort_keys=True))
+            print(f"saved: {out}")
+            return 0 if s.get("rc") == 0 else 5
+        elif a.cmd == "exaone" and a.target is None:
+            raise Halt(f"exaone {a.action} needs a target ({'spec.yaml' if a.action == 'plan' else 'plan dir'})")
+        elif a.cmd == "exaone" and a.action == "show":   # offline, read-only: no ledger row, no key, any session
+            try:
+                text = exaone.show(a.target, _builder(a, a.target))
+            except (OSError, ValueError) as e:
+                raise Halt(f"exaone show: cannot read plan {a.target} ({type(e).__name__})")
+            try:
+                sys.stdout.write(text + "\n")
+                sys.stdout.flush()
+            except BrokenPipeError:            # `show | less` quit early: nothing to report
+                try:
+                    os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+                except (OSError, ValueError):
+                    pass
+            return 0
+        elif a.cmd == "exaone" and a.action == "plan":
+            if not a.target.is_file():
+                raise Halt(f"exaone plan: spec {a.target} not found (paths are relative to the current directory; "
+                           f"batch dirs live under {DEFAULT_BATCH_ROOT}/11_batches/)")
+            d = exaone.plan(a.target, _builder(a, a.target.parent), ledger)
+            print(f"exaone planned {d['n_requests']} / {exaone.DAY_REQUEST_LIMIT_OBSERVED} requests (observed daily "
+                  f"limit, {exaone.DAY_LIMIT_SOURCE}); hard-worst {d['hard_worst_tokens']} tokens "
+                  f"(cap {d['max_total_tokens']}; price unpublished); plan_hash {d['plan_hash'][:12]}\n"
+                  f"read first: ... -m tools.api_batch.cli exaone show {a.target.parent} | less\n"
+                  f"user, in your own terminal: ... -m tools.api_batch.cli {d['approve_cmd']}")
+        elif a.cmd == "exaone":
+            try:
+                _d, pend = exaone.pending_rows(a.target, ledger)
+            except (OSError, ValueError) as e:
+                raise Halt(f"exaone run: cannot read plan {a.target} ({type(e).__name__}); paths are relative to the "
+                           f"current directory, batch dirs live under {DEFAULT_BATCH_ROOT}/11_batches/")
+            if not pend:
+                print(f"exaone: nothing to do -- every request of {a.target} is already done (no approval used)")
+                return 0                      # before RealExaoneClient(): no key read, no ledger row
+            r = exaone.run(a.target, ledger, client or exaone.RealExaoneClient(), _builder(a, a.target))
             print(r)
             return 0 if r["halted"] is None and all(x["rc"] == 0 for x in r["requests"]) else 5
         elif a.cmd in ("submit", "status", "cancel", "collect", "probe-sync"):
