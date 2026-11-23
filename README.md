@@ -41,8 +41,8 @@ how much recursive compute each step gets.
 - **z dynamics logging**: runs with `+log_z_dynamics=True` emit `z/eff_rank`, `phase/index`, and
   `z/delta_step_*` to Weights & Biases (project `Sigma_k` / `Sigma_k_new`) for tracking how the
   latent evolves across recursive steps and training.
-- **Live findings, hypotheses, and experiment reports** live in `lab/` (`lab/reports/`,
-  `lab/theory/`), not in this README — start at `lab/INDEX.md` for the current state. Read those
+- **Live findings, hypotheses, and experiment reports** live in `lab/` (`lab/23_reports/11_lab-reports/`,
+  `lab/27_theory/11_lab-theory/`), not in this README — start at `lab/11_governance/11_lab-root/STATE.md` for the current state. Read those
   before treating any specific claim about `z`-removal or collapse as settled; the mechanism is
   under active investigation, not established.
 
@@ -118,7 +118,7 @@ measure. Full operational detail (GPU/queue conventions, config keys, report dis
 `CLAUDE.md`; the shape of it:
 
 ```bash
-# 1. Define the grid by editing the *_SWEEP / K_LIST variables in the script, then:
+# 1. Define the grid by editing the COHORTS / K_LIST arrays in the script (or override STAGES= / K_LIST= in the environment), then:
 scripts/sigma_enqueue.sh --dry-run <prefix>    # print the grid — check before spending GPU time
 scripts/sigma_enqueue.sh <prefix>              # write job files to scripts/queue/jobs/
 
@@ -140,7 +140,7 @@ Swap `arch=trm` for `arch=trm_singlez` to run the no-z cohort.
 ## Tests
 
 ```bash
-uv run pytest tests/
+CUDA_VISIBLE_DEVICES="" uv run pytest tests/
 ```
 
 ## Upstream paper experiments

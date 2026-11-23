@@ -39,7 +39,13 @@ from typing import Any, Callable
 
 import pytest
 
-from lab.figure_pipeline import run_pipeline as rp
+pytest.importorskip(
+    "lab.figure_pipeline",
+    reason="figure pipeline v3 now sits under lab/26_figure-pipeline/ (not an importable package path); "
+    "superseded by tools/figures",
+)
+
+from lab.figure_pipeline import run_pipeline as rp  # noqa: E402
 from lab.figure_pipeline.acquisition import nas_export as ne
 from lab.figure_pipeline.acquisition import web_api as web
 from lab.figure_pipeline.core import canonical

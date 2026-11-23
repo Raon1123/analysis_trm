@@ -30,11 +30,11 @@ from analysis.build_how_trm_works_evidence import (
 
 
 ROOT = Path(__file__).resolve().parents[1]
-EXP = ROOT / "lab/experiments/EXP-012_clean-r1-mechanism-scaling-gates.md"
-PERCELL = ROOT / "lab/figure_pipeline/outputs/fig1-full-20260728/percell_table.csv"
+EXP = ROOT / "lab/21_experiments/11_lab-experiments/EXP-012_clean-r1-mechanism-scaling-gates.md"
+PERCELL = ROOT / "lab/26_figure-pipeline/11_lab-figure-pipeline/13_outputs/13_fig1-full-20260728/percell_table.csv"
 PRESERVATION = (
     ROOT
-    / "lab/reports/2026-07-30_success-mechanism-briefs/preservation_clean.json"
+    / "lab/23_reports/11_lab-reports/12_2026-07-30_success-mechanism-briefs/preservation_clean.json"
 )
 
 

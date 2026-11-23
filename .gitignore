@@ -6,7 +6,7 @@ venv/
 wandb/
 checkpoints/
 logs/
-# scripts는 추적 (큐 런타임 상태만 제외)
+# 주의: 아래 `scripts/` 규칙이 scripts/ 전체를 ignore한다 — 이미 추적 중인 3개(queue_run.sh, sigma_enqueue.sh, verify_looped_grid.py)만 추적되고 새 스크립트는 `git add -f`가 필요하다. 다음 줄은 큐 런타임 상태 제외
 scripts/queue/
 
 lab/

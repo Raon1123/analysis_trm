@@ -1,4 +1,4 @@
-# analysis/z_dynamics — EXP-017 per-call readout analysis (pre-registered, unrun)
+# analysis/z_dynamics — EXP-017 per-call readout analysis (pre-registered; judged 2026-10-04, see EXP-017_RESULTS.md)
 
 This package implements the analysis that EXP-017 pre-registers
 (`/mnt/ayp/agents/trm/21_experiments/11_lab-experiments/EXP-017_z-dynamics-latent-formation.md`, H-201).

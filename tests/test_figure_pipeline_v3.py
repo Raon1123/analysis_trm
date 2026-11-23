@@ -28,7 +28,13 @@ from typing import Any
 
 import pytest
 
-from lab.figure_pipeline.core import sealing
+pytest.importorskip(
+    "lab.figure_pipeline",
+    reason="figure pipeline v3 now sits under lab/26_figure-pipeline/ (not an importable package path); "
+    "superseded by tools/figures",
+)
+
+from lab.figure_pipeline.core import sealing  # noqa: E402
 from lab.figure_pipeline.core.exits import ExitCode, PolicyError, VerificationError
 from lab.figure_pipeline.core.paths import DATASETS_ROOT, STAGING_ROOT
 from lab.figure_pipeline.promote import cli as promote_cli

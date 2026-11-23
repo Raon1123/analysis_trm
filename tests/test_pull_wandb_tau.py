@@ -5,8 +5,9 @@ from pathlib import Path
 MODULE_PATH = (
     Path(__file__).resolve().parents[1]
     / "lab"
-    / "sync"
-    / "sigma-k-tau-grid"
+    / "94_sync"
+    / "11_lab-sync"
+    / "11_sigma-k-tau-grid"
     / "pull_wandb_tau.py"
 )
 SPEC = importlib.util.spec_from_file_location("pull_wandb_tau", MODULE_PATH)

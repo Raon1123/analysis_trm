@@ -11,7 +11,7 @@ import time
 import pytest
 
 
-MODULE_PATH = Path(__file__).parents[1] / "lab/monitoring/dashboard/extract_evals_web.py"
+MODULE_PATH = Path(__file__).parents[1] / "lab/93_monitoring/11_lab-monitoring/11_dashboard/extract_evals_web.py"
 SPEC = importlib.util.spec_from_file_location("extract_evals_web", MODULE_PATH)
 web = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None

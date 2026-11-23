@@ -11,9 +11,9 @@ import pytest
 
 
 REPO = Path(__file__).resolve().parents[1]
-PIPE = REPO / "lab/monitoring/dashboard/run_figure_pipeline.py"
-LOCAL = REPO / "lab/monitoring/dashboard/extract_evals.py"
-DEFAULT_RUN_ROOT = REPO / "lab/figures/pipeline-runs"
+PIPE = REPO / "lab/93_monitoring/11_lab-monitoring/11_dashboard/run_figure_pipeline.py"
+LOCAL = REPO / "lab/93_monitoring/11_lab-monitoring/11_dashboard/extract_evals.py"
+DEFAULT_RUN_ROOT = REPO / "lab/25_figures/11_lab-curated/19_pipeline-runs"
 
 
 def call(*args: str) -> subprocess.CompletedProcess[str]:
@@ -112,7 +112,7 @@ def test_reversed_stage_order_is_rejected(tmp_path: Path, stages: str) -> None:
     assert "canonical order" in result.stderr
 
 
-@pytest.mark.parametrize("descendant", ["reports/x", "lab/monitoring/dashboard/x", ".git/x",
+@pytest.mark.parametrize("descendant", ["reports/x", "lab/93_monitoring/11_lab-monitoring/11_dashboard/x", ".git/x",
                                         "scripts/queue/x", "data/x", "checkpoints/x", "wandb/x"])
 def test_pipeline_rejects_every_repository_descendant(descendant: str) -> None:
     result = call(PIPE, "--source", "local", "--output-dir", REPO / descendant, "--dry-run")
@@ -195,7 +195,7 @@ def test_staged_resume_integration_and_require_node(tmp_path: Path) -> None:
     assert (out / "dashboard/trm-rs-pipeline.html").is_file()
 
     missing_node = subprocess.run(
-        [sys.executable, REPO / "lab/monitoring/dashboard/smoke_render.py",
+        [sys.executable, REPO / "lab/93_monitoring/11_lab-monitoring/11_dashboard/smoke_render.py",
          "--html-dir", out / "dashboard", "--require-node"],
         cwd=REPO, text=True, capture_output=True, env={"PATH": "/definitely-missing"},
     )

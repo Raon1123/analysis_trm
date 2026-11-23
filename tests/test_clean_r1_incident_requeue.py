@@ -151,8 +151,8 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, Path]:
     (repo / "scripts" / "queue_run.sh").write_bytes(RUNNER.read_bytes())
     (repo / "scripts" / "sigma_enqueue.sh").write_text("#!/usr/bin/env bash\n# synthetic emitter\n", encoding="utf-8")
     for name in ("verification_report.md", "job_semantics.json", "job_semantics.csv"):
-        source = REPO_ROOT / "lab" / "audits" / "2026-07-30_clean-r1-job-semantics" / name
-        target = repo / "lab" / "audits" / "2026-07-30_clean-r1-job-semantics" / name
+        source = REPO_ROOT / "lab" / "24_audits" / "11_lab-audits" / "26_2026-07-30_clean-r1-job-semantics" / name
+        target = repo / "lab" / "24_audits" / "11_lab-audits" / "26_2026-07-30_clean-r1-job-semantics" / name
         target.parent.mkdir(parents=True, exist_ok=True)
         copyfile(source, target)
     (queue / "stop").write_text("incident safety hold\n", encoding="utf-8")
