@@ -1,6 +1,7 @@
 from typing import Tuple, List, Dict, Optional
 from dataclasses import dataclass
 import math
+import contextlib
 import torch
 import copy
 import torch.nn.functional as F
@@ -61,6 +62,15 @@ class TinyRecursiveReasoningModel_ACTV1Config(BaseModel):
     mlp_t: bool = False # use mlp on L instead of transformer
     puzzle_emb_len: int = 16 # if non-zero, its specified to this value
     no_ACT_continue: bool =  True # No continue ACT loss, only use the sigmoid of the halt which makes much more sense
+
+    # EXP-018 flags (all default off == previous behaviour, bit-identical)
+    inject_last: bool = False       # SINGLE_FULL: 7th step also z <- f(z + x)
+    step_token: bool = False        # SINGLE_TOK: prepend one learned token at the 7th step only, strip from output
+    full_grad_cycles: bool = False  # G3a: no no_grad truncation, every H cycle carries gradient
+    per_cycle_loss: bool = False    # G3b: LM loss on every cycle output, detach between cycles
+    learnable_init: bool = False    # G3c: L_init is nn.Parameter
+    boundary_copy: bool = False     # G4: re-inject copy of the cycle-boundary state at every x-step
+    x_copy: bool = False            # G4 control: re-inject a second copy of x at every x-step
 
 class TinyRecursiveReasoningModel_ACTV1Block(nn.Module):
     def __init__(self, config: TinyRecursiveReasoningModel_ACTV1Config) -> None:
@@ -149,7 +159,24 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         self.L_level = TinyRecursiveReasoningModel_ACTV1ReasoningModule(layers=[TinyRecursiveReasoningModel_ACTV1Block(self.config) for _i in range(self.config.L_layers)])
 
         # Initial states
-        self.L_init = nn.Buffer(trunc_normal_init_(torch.empty(self.config.hidden_size, dtype=self.forward_dtype), std=1), persistent=True)
+        _c = self.config
+        if _c.boundary_copy and _c.x_copy:
+            raise ValueError("boundary_copy and x_copy are mutually exclusive")
+        _L0 = trunc_normal_init_(torch.empty(self.config.hidden_size, dtype=self.forward_dtype), std=1)
+        if _c.learnable_init:  # fp32 master copy, cast to forward_dtype at use
+            self.L_init = nn.Parameter(_L0.to(torch.float32))
+        else:
+            self.L_init = nn.Buffer(_L0, persistent=True)
+
+        if _c.step_token:
+            if _c.mlp_t:
+                raise ValueError("step_token needs a length-flexible block; incompatible with mlp_t")
+            # created only when on, after every default-path RNG draw -> default init unchanged
+            self.step_tok = nn.Parameter(trunc_normal_init_(torch.empty(self.config.hidden_size, dtype=torch.float32), std=1))
+            if self.config.pos_encodings == "rope":  # the token step sees seq_len+puzzle_emb_len+1 positions
+                self.rotary_emb_tok = RotaryEmbedding(dim=self.config.hidden_size // self.config.num_heads,
+                                                      max_position_embeddings=self.config.seq_len + self.puzzle_emb_len + 1,
+                                                      base=self.config.rope_theta)
 
         # Q head special init
         # Init Q to (almost) zero for faster learning during bootstrapping
@@ -186,8 +213,16 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         
     def reset_carry(self, reset_flag: torch.Tensor, carry: TinyRecursiveReasoningModel_ACTV1InnerCarry):
         return TinyRecursiveReasoningModel_ACTV1InnerCarry(
-            z_L=torch.where(reset_flag.view(-1, 1, 1), self.L_init, carry.z_L),
+            z_L=torch.where(reset_flag.view(-1, 1, 1), self.L_init.to(self.forward_dtype), carry.z_L),
         )
+
+    def _step_with_token(self, z: torch.Tensor, seq_info: dict) -> torch.Tensor:
+        # prepend-strip (Shen Table 2): learned token at position 0 for this single f call, removed from f's output.
+        tok = self.step_tok.to(z.dtype).view(1, 1, -1).expand(z.shape[0], 1, -1)
+        info = dict(seq_info)
+        if hasattr(self, "rotary_emb_tok"):
+            info["cos_sin"] = self.rotary_emb_tok()
+        return self.L_level(torch.cat((tok, z), dim=1), **info)[:, 1:]
 
     def forward(self, carry: TinyRecursiveReasoningModel_ACTV1InnerCarry, batch: Dict[str, torch.Tensor]) -> Tuple[TinyRecursiveReasoningModel_ACTV1InnerCarry, torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
         seq_info = dict(
@@ -199,23 +234,36 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
 
         # Forward iterations
         it = 0
+        cfg = self.config
         z_L = carry.z_L
-        # H_cycles-1 without grad
-        with torch.no_grad():
-            for _H_step in range(self.config.H_cycles-1):
-                for _L_step in range(self.config.L_cycles):
-                    z_L = self.L_level(z_L + input_embeddings, **seq_info)
-                z_L = self.L_level(z_L, **seq_info)
-        # 1 with grad
-        for _L_step in range(self.config.L_cycles):
-            z_L = self.L_level(z_L + input_embeddings, **seq_info)
-        z_L = self.L_level(z_L, **seq_info)
+        cycle_logits = []
+        # H_cycles-1 without grad (default), last cycle with grad. EXP-018: full_grad_cycles / per_cycle_loss
+        # keep gradient in every cycle (per_cycle_loss detaches the state between cycles).
+        for _H_step in range(cfg.H_cycles):
+            is_last = _H_step == cfg.H_cycles - 1
+            grad_ctx = contextlib.nullcontext() if (is_last or cfg.full_grad_cycles or cfg.per_cycle_loss) else torch.no_grad()
+            with grad_ctx:
+                x_inj = input_embeddings
+                if cfg.boundary_copy:
+                    x_inj = input_embeddings + z_L  # z_L here = state at the cycle boundary (cycle start)
+                elif cfg.x_copy:
+                    x_inj = input_embeddings + input_embeddings
+                for _L_step in range(cfg.L_cycles):
+                    z_L = self.L_level(z_L + x_inj, **seq_info)
+                z_last = (z_L + input_embeddings) if cfg.inject_last else z_L
+                z_L = self._step_with_token(z_last, seq_info) if cfg.step_token else self.L_level(z_last, **seq_info)
+                if cfg.per_cycle_loss and not is_last:
+                    if self.training:
+                        cycle_logits.append(self.lm_head(z_L)[:, self.puzzle_emb_len:])
+                    z_L = z_L.detach()
         z_out = z_L
 
         # LM Outputs
         new_carry = TinyRecursiveReasoningModel_ACTV1InnerCarry(z_L=z_L.detach())  # New carry no grad
         output = self.lm_head(z_out)[:, self.puzzle_emb_len:]
         q_logits = self.q_head(z_out[:, 0]).to(torch.float32) # Q-head; uses the first puzzle_emb position
+        if cfg.per_cycle_loss:
+            return new_carry, output, (q_logits[..., 0], q_logits[..., 1]), cycle_logits
         return new_carry, output, (q_logits[..., 0], q_logits[..., 1])
 
 
@@ -253,13 +301,18 @@ class TinyRecursiveReasoningModel_ACTV1(nn.Module):
         new_current_data = {k: torch.where(carry.halted.view((-1, ) + (1, ) * (batch[k].ndim - 1)), batch[k], v) for k, v in carry.current_data.items()}
 
         # Forward inner model
-        new_inner_carry, logits, (q_halt_logits, q_continue_logits) = self.inner(new_inner_carry, new_current_data)
+        if self.config.per_cycle_loss:
+            new_inner_carry, logits, (q_halt_logits, q_continue_logits), cycle_logits = self.inner(new_inner_carry, new_current_data)
+        else:
+            new_inner_carry, logits, (q_halt_logits, q_continue_logits) = self.inner(new_inner_carry, new_current_data)
 
         outputs = {
             "logits": logits,
             "q_halt_logits": q_halt_logits,
             "q_continue_logits": q_continue_logits
         }
+        if self.config.per_cycle_loss and len(cycle_logits) > 0:
+            outputs["cycle_logits"] = torch.stack(cycle_logits)  # (H-1, B, S, V); consumed by ACTLossHead
 
         with torch.no_grad():
             # Step

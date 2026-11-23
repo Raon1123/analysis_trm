@@ -90,6 +90,14 @@ class ACTLossHead(nn.Module):
             "lm_loss": lm_loss.detach(),
             "q_halt_loss": q_halt_loss.detach(),
         })
+        # EXP-018 per_cycle_loss: LM loss on every intermediate H-cycle output (weight 1 each); absent -> no-op
+        cycle_lm_loss = None
+        if "cycle_logits" in outputs:
+            cycle_lm_loss = sum(
+                (self.loss_fn(cl, labels, ignore_index=IGNORE_LABEL_ID, valid_mask=mask) / loss_divisor).sum()
+                for cl in outputs["cycle_logits"]
+            )
+            metrics["cycle_lm_loss"] = cycle_lm_loss.detach()
         # Q continue (bootstrapping target loss); Alexia: This fits Q-learning, but seems totally unecessary
         q_continue_loss = 0
         if "target_q_continue" in outputs:
@@ -99,5 +107,8 @@ class ACTLossHead(nn.Module):
         # Filter outputs for return
         detached_outputs = {k: outputs[k].detach() for k in return_keys if k in outputs}
 
-        return new_carry, lm_loss + 0.5 * (q_halt_loss + q_continue_loss), metrics, detached_outputs, new_carry.halted.all()
+        total_loss = lm_loss + 0.5 * (q_halt_loss + q_continue_loss)
+        if cycle_lm_loss is not None:
+            total_loss = total_loss + cycle_lm_loss
+        return new_carry, total_loss, metrics, detached_outputs, new_carry.halted.all()
 
