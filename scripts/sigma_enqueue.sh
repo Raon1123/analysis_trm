@@ -1211,6 +1211,79 @@ EOF
         done; done
         return 0
     fi
+    # -- cl27 (2026-11-23, PROPOSED, not frozen): ICML 2027 learning-rate sensitivity, halt 1, D1 k in {5,6,7} --
+    # Prereg draft: lab/23_reports/11_lab-reports/2026-11-23_icml27-lr-sensitivity-prereg-DRAFT.md.
+    # Dedicated stages (no existing array or stage touched); explicit selection only, empty prefix:
+    #   cl27_tg  TRM and LT-g7 at lr = puzzle_emb_lr = 3e-5 and 3e-4, k 5 6 7, 3 seeds per cell (36 jobs)
+    #   cl27_z   trm_singlez at lr = puzzle_emb_lr = 3e-4, k 5 6 7, seeds 134-136 (9 jobs)
+    # Body = the cc27 halt-1 body of the same arm and k (cc27_trm_h1 / cc27_g7_h1 / cc27_noz_h1) with only
+    # "lr=1e-4 puzzle_emb_lr=1e-4" replaced by the cell's rate (the cx27_x7 rule; weight-decay overrides kept)
+    # and the identity fields (seed, run_group, run_name, cell_id) changed.
+    # Cell seeds: trm 3e-5 121-123; trm 3e-4 124-126; g7 3e-5 127-129; g7 3e-4 131-133; noz 3e-4 134-136.
+    # Run names: cl27_{trm,g7,noz}_lr{3em5,3em4}_h1_k{k}_s{s} (3em5 = 3e-5, 3em4 = 3e-4).
+    # Order: k -> cell -> seed (cl27_tg cells before the cl27_z cell inside each k). Data root fixed to D1.
+    if [[ " $STAGES " == *" cl27_tg "* || " $STAGES " == *" cl27_z "* ]]; then
+        if [[ -n "$RUN_PREFIX" ]]; then
+            echo "ERROR: cl27 uses fixed run names; run with no prefix" >&2
+            exit 1
+        fi
+        local cl_common="epochs=50000 eval_interval=2000 lr=1e-4 puzzle_emb_lr=1e-4 weight_decay=1.0 puzzle_emb_weight_decay=1.0 +log_z_dynamics=True +z_snapshot=True checkpoint_every_eval=False +eval_save_outputs=[inputs,labels,preds,puzzle_identifiers]"
+        local cl_trm_args="arch.mlp_t=False arch.H_cycles=3 arch.L_cycles=6 arch.L_layers=2"
+        local cl_g7_h1="arch.H_layers=2 arch.halt_max_steps=1 arch.loops=21 arch.loop_grad_cycles=7 arch.loop_input_injection=True"
+        # cl27_emit <tag: trm|g7|noz> <rate tag: 3em5|3em4> <k> <s>
+        cl27_emit() {
+            local tag="$1" rt="$2" ck="$3" cs="$4" carch cargs crate ccommon
+            case "$rt" in
+                3em5) crate="3e-5" ;;
+                3em4) crate="3e-4" ;;
+                *) echo "ERROR: cl27_emit: bad rate tag ${rt}" >&2; exit 1 ;;
+            esac
+            ccommon="${cl_common/lr=1e-4 puzzle_emb_lr=1e-4/lr=${crate} puzzle_emb_lr=${crate}}"
+            case "$tag" in
+                trm) carch="trm";                   cargs="${cl_trm_args} arch.halt_max_steps=1" ;;
+                noz) carch="trm_singlez";           cargs="${cl_trm_args} arch.halt_max_steps=1" ;;
+                g7)  carch="transformers_baseline"; cargs="${cl_g7_h1}" ;;
+                *) echo "ERROR: cl27_emit: bad arm ${tag}" >&2; exit 1 ;;
+            esac
+            enqueue "cl27_${tag}_lr${rt}_h1_k${ck}_s${cs}" <<EOF
+uv run pretrain.py arch=${carch} ${ccommon} \\
+    ${cargs} \\
+    evaluators="[]" \\
+    data_paths="[data/power_permutation/d1/${ck}]" \\
+    seed=${cs} \\
+    +k=${ck} \\
+    +project_name="power_permutation" \\
+    +run_group="cl27" \\
+    +run_name="cl27_${tag}_lr${rt}_h1_k${ck}_s${cs}" \\
+    +cell_id='"arm=cl27,cohort=${tag}_lr${rt},halt=1,n=10,k=${ck},s=${cs}"' \\
+    ema=True
+EOF
+        }
+        local clk clspec cltag clrt cls
+        # tag|rate tag|seed   (one seed triple per cell)
+        local -a cl_tg_cells=(
+            "trm|3em5|121" "trm|3em5|122" "trm|3em5|123"
+            "g7|3em5|127"  "g7|3em5|128"  "g7|3em5|129"
+            "trm|3em4|124" "trm|3em4|125" "trm|3em4|126"
+            "g7|3em4|131"  "g7|3em4|132"  "g7|3em4|133"
+        )
+        local -a cl_z_cells=( "noz|3em4|134" "noz|3em4|135" "noz|3em4|136" )
+        for clk in 5 6 7; do
+            if [[ " $STAGES " == *" cl27_tg "* ]]; then
+                for clspec in "${cl_tg_cells[@]}"; do
+                    IFS='|' read -r cltag clrt cls <<< "$clspec"
+                    cl27_emit "$cltag" "$clrt" "$clk" "$cls"
+                done
+            fi
+            if [[ " $STAGES " == *" cl27_z "* ]]; then
+                for clspec in "${cl_z_cells[@]}"; do
+                    IFS='|' read -r cltag clrt cls <<< "$clspec"
+                    cl27_emit "$cltag" "$clrt" "$clk" "$cls"
+                done
+            fi
+        done
+        return 0
+    fi
     # -- legacy_redo (2026-11-03, user decision; PIP handoff 03:42 §3) --
     # Re-run the 11 legacy Sigma_k_fig12 cells that never completed:
     #   EXP-006 2x-extension arm (fig1x2_*, epochs=200000): noz_iter k7 s1-3,
