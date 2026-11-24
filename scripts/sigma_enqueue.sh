@@ -1165,6 +1165,52 @@ EOF
         fi
         return 0
     fi
+    # -- cu27 (2026-11-20, PROPOSED, not frozen): ICML 2027 halt-1 cube, D1 k in {5,6,7}, 3 seeds per k per cell --
+    # Prereg draft: lab/23_reports/11_lab-reports/2026-11-20_icml27-h1cube-prereg-DRAFT.md.
+    # Dedicated stage (no existing array or stage touched); explicit selection only, empty prefix:
+    #   cu27_h1  looped factorial at halt 1, arch=transformers_baseline_px, 6 cells x 3 seeds x k 5 6 7 (54)
+    #            body = the cc27_g7_h1 body with arch=transformers_baseline -> transformers_baseline_px and
+    #            three explicit overrides arch.num_heads / arch.puzzle_emb_len /
+    #            arch.loop_input_injection_skip_period appended after the last arch override.
+    #            cell (heads,prefix,period) seeds: px12p1s7 101-103; px8p1s0 104-106; px8p1s7 107-109;
+    #            px12p16s0 111-113; px12p16s7 114-116; px8p16s0 117-119
+    #            (the remaining two vertices are parent arms: px12p1s0 = cc27_g7_h1, px8p16s7 = cc27_noz_h1)
+    # Run names: cu27_px{H}p{P}s{S}_h1_k{k}_s{s}. Order: k -> seed. Data root fixed to D1.
+    if [[ " $STAGES " == *" cu27_h1 "* ]]; then
+        if [[ -n "$RUN_PREFIX" ]]; then
+            echo "ERROR: cu27 uses fixed run names; run with no prefix" >&2
+            exit 1
+        fi
+        local cu_common="epochs=50000 eval_interval=2000 lr=1e-4 puzzle_emb_lr=1e-4 weight_decay=1.0 puzzle_emb_weight_decay=1.0 +log_z_dynamics=True +z_snapshot=True checkpoint_every_eval=False +eval_save_outputs=[inputs,labels,preds,puzzle_identifiers]"
+        local cu_g7_h1="arch.H_layers=2 arch.halt_max_steps=1 arch.loops=21 arch.loop_grad_cycles=7 arch.loop_input_injection=True"
+        local cuk cus cuh cup cuss cuspec
+        # seed|heads|prefix|period   (cell tag = px{heads}p{prefix}s{period})
+        local -a cu_cells=(
+            "101|12|1|7" "102|12|1|7" "103|12|1|7"
+            "104|8|1|0"  "105|8|1|0"  "106|8|1|0"
+            "107|8|1|7"  "108|8|1|7"  "109|8|1|7"
+            "111|12|16|0" "112|12|16|0" "113|12|16|0"
+            "114|12|16|7" "115|12|16|7" "116|12|16|7"
+            "117|8|16|0" "118|8|16|0" "119|8|16|0"
+        )
+        for cuk in 5 6 7; do for cuspec in "${cu_cells[@]}"; do
+            IFS='|' read -r cus cuh cup cuss <<< "$cuspec"
+            enqueue "cu27_px${cuh}p${cup}s${cuss}_h1_k${cuk}_s${cus}" <<EOF
+uv run pretrain.py arch=transformers_baseline_px ${cu_common} \\
+    ${cu_g7_h1} arch.num_heads=${cuh} arch.puzzle_emb_len=${cup} arch.loop_input_injection_skip_period=${cuss} \\
+    evaluators="[]" \\
+    data_paths="[data/power_permutation/d1/${cuk}]" \\
+    seed=${cus} \\
+    +k=${cuk} \\
+    +project_name="power_permutation" \\
+    +run_group="cu27" \\
+    +run_name="cu27_px${cuh}p${cup}s${cuss}_h1_k${cuk}_s${cus}" \\
+    +cell_id='"arm=cu27,cohort=px${cuh}p${cup}s${cuss},halt=1,n=10,k=${cuk},s=${cus}"' \\
+    ema=True
+EOF
+        done; done
+        return 0
+    fi
     # -- legacy_redo (2026-11-03, user decision; PIP handoff 03:42 §3) --
     # Re-run the 11 legacy Sigma_k_fig12 cells that never completed:
     #   EXP-006 2x-extension arm (fig1x2_*, epochs=200000): noz_iter k7 s1-3,
